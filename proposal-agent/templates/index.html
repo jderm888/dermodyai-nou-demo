@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOU Systems — Proposal Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #58a6ff;
+      letter-spacing: -0.5px;
+    }
+    header .subtitle {
+      font-size: 13px;
+      color: #8b949e;
+    }
+    header .badge {
+      margin-left: auto;
+      background: #1f6feb22;
+      border: 1px solid #1f6feb55;
+      color: #58a6ff;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .pipeline {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 32px;
+      align-items: center;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      font-size: 13px;
+      color: #8b949e;
+      transition: all 0.2s;
+    }
+    .step.active { border-color: #58a6ff; color: #58a6ff; background: #1f6feb15; }
+    .step.done   { border-color: #3fb950; color: #3fb950; background: #3fb95015; }
+    .step-num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #30363d;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+    }
+    .step.active .step-num { background: #58a6ff; color: #0d1117; }
+    .step.done .step-num   { background: #3fb950; color: #0d1117; }
+    .arrow { color: #30363d; font-size: 18px; }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e6edf3;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tab-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: transparent;
+      color: #8b949e;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      color: #e6edf3;
+      font-size: 13px;
+      font-family: monospace;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { outline: none; border-color: #58a6ff; }
+
+    .file-drop {
+      border: 2px dashed #30363d;
+      border-radius: 8px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #8b949e;
+      font-size: 14px;
+    }
+    .file-drop:hover, .file-drop.dragover {
+      border-color: #58a6ff;
+      background: #1f6feb10;
+      color: #58a6ff;
+    }
+    .file-drop input { display: none; }
+    .file-name {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #3fb950;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: #1f6feb;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #388bfd; }
+    .btn-primary:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+    .btn-success {
+      background: #238636;
+      color: #fff;
+    }
+    .btn-success:hover { background: #2ea043; }
+    .btn-success:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    @media (max-width: 700px) { .results-grid { grid-template-columns: 1fr; } }
+
+    .result-panel {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .result-panel h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .tag {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .tag-blue   { background: #1f6feb22; border: 1px solid #1f6feb55; color: #58a6ff; }
+    .tag-green  { background: #2ea04322; border: 1px solid #2ea04355; color: #3fb950; }
+    .tag-orange { background: #d2933122; border: 1px solid #d2933155; color: #f0883e; }
+
+    .meta-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .meta-row span { color: #8b949e; }
+    .meta-row strong { color: #e6edf3; }
+
+    .cap-item {
+      padding: 10px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .cap-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .cap-name { font-size: 13px; font-weight: 600; }
+    .score {
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+    .score-high   { background: #3fb95030; color: #3fb950; }
+    .score-medium { background: #d2933130; color: #f0883e; }
+    .cap-why { font-size: 12px; color: #8b949e; margin-top: 2px; }
+
+    #draft-area {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      min-height: 200px;
+      white-space: pre-wrap;
+      font-family: "Georgia", serif;
+    }
+    #draft-area h2 { font-size: 16px; font-weight: 700; margin: 20px 0 8px; color: #58a6ff; }
+    #draft-area h3 { font-size: 14px; font-weight: 600; margin: 14px 0 6px; color: #e6edf3; }
+    #draft-area p  { margin-bottom: 10px; }
+    #draft-area ul { margin: 6px 0 10px 20px; }
+    #draft-area li { margin-bottom: 4px; }
+    .draft-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: #58a6ff;
+      animation: blink 0.8s step-end infinite;
+      vertical-align: text-bottom;
+      margin-left: 1px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .copy-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: transparent;
+      color: #8b949e;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .copy-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+
+    .error-box {
+      background: #da363022;
+      border: 1px solid #da363055;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #ff7b72;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .hidden { display: none !important; }
+    .section-divider { border: none; border-top: 1px solid #30363d; margin: 8px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">NOU Systems — Proposal Assistant</div>
+    <div class="subtitle">AI-powered RFP analysis &amp; proposal drafting</div>
+  </div>
+  <div class="badge">Demo</div>
+</header>
+
+<div class="container">
+
+  <!-- Pipeline indicator -->
+  <div class="pipeline">
+    <div class="step active" id="step-1"><div class="step-num">1</div> Upload RFP</div>
+    <div class="arrow">›</div>
+    <div class="step" id="step-2"><div class="step-num">2</div> Extract Requirements</div>
+    <div class="arrow">›</div>
+    <div class="step" id="step-3"><div class="step-num">3</div> Match Capabilities</div>
+    <div class="arrow">›</div>
+    <div class="step" id="step-4"><div class="step-num">4</div> Draft Proposal</div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card" id="input-card">
+    <h2>RFP Input</h2>
+    <div class="tab-row">
+      <button class="tab active" onclick="switchTab('text')">Paste Text</button>
+      <button class="tab" onclick="switchTab('file')">Upload PDF / TXT</button>
+    </div>
+
+    <div id="tab-text">
+      <textarea id="rfp-text" placeholder="Paste your RFP text here...
+Example: 'The Government requires contractor support for systems engineering and M&S activities in support of the Integrated Air and Missile Defense (IAMD) program...'"></textarea>
+    </div>
+    <div id="tab-file" class="hidden">
+      <div class="file-drop" id="file-drop" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".pdf,.txt" onchange="handleFileSelect(this)" />
+        <div>Drop a PDF or TXT file here, or click to browse</div>
+        <div class="file-name" id="file-name"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; gap:12px; align-items:center;">
+      <button class="btn btn-primary" id="analyze-btn" onclick="runAnalysis()">
+        <div class="spinner" id="analyze-spinner"></div>
+        Analyze RFP
+      </button>
+      <span id="analyze-status" style="font-size:13px; color:#8b949e;"></span>
+    </div>
+    <div class="error-box" id="analyze-error"></div>
+  </div>
+
+  <!-- Results Card (hidden until analysis runs) -->
+  <div class="card hidden" id="results-card">
+    <h2>Analysis Results</h2>
+    <div class="results-grid">
+      <!-- Requirements -->
+      <div class="result-panel">
+        <h3>RFP Details</h3>
+        <div class="meta-row" id="rfp-meta"></div>
+        <hr class="section-divider" style="margin:12px 0;">
+        <h3 style="margin-bottom:8px;">Key Themes</h3>
+        <div class="tag-list" id="key-themes"></div>
+        <hr class="section-divider" style="margin:12px 0;">
+        <h3 style="margin-bottom:8px;">Technical Requirements</h3>
+        <ul id="tech-reqs" style="font-size:13px; padding-left:18px; line-height:1.7; color:#c9d1d9;"></ul>
+        <hr class="section-divider" style="margin:12px 0;">
+        <h3 style="margin-bottom:8px;">Evaluation Criteria</h3>
+        <div class="tag-list" id="eval-criteria"></div>
+      </div>
+
+      <!-- Matched Capabilities -->
+      <div class="result-panel">
+        <h3>Matched Capabilities</h3>
+        <div id="matched-caps"></div>
+        <hr class="section-divider" style="margin:12px 0;">
+        <h3 style="margin-bottom:8px;">Win Themes</h3>
+        <div class="tag-list" id="win-themes"></div>
+        <div id="gaps-section" class="hidden">
+          <hr class="section-divider" style="margin:12px 0;">
+          <h3 style="margin-bottom:8px;">Coverage Gaps</h3>
+          <ul id="coverage-gaps" style="font-size:12px; padding-left:18px; line-height:1.7; color:#f0883e;"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px; display:flex; gap:12px; align-items:center;">
+      <button class="btn btn-success" id="draft-btn" onclick="runDraft()">
+        <div class="spinner" id="draft-spinner"></div>
+        Generate Proposal Draft
+      </button>
+      <span id="draft-status" style="font-size:13px; color:#8b949e;"></span>
+    </div>
+    <div class="error-box" id="draft-error"></div>
+  </div>
+
+  <!-- Draft Card (hidden until draft starts) -->
+  <div class="card hidden" id="draft-card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <h2 style="margin:0;">Proposal Draft</h2>
+      <button class="copy-btn" onclick="copyDraft()">Copy to Clipboard</button>
+    </div>
+    <div id="draft-area"></div>
+  </div>
+
+</div>
+
+<script>
+  let currentTab = 'text';
+  let selectedFile = null;
+  let analysisResult = null;
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-text').classList.toggle('hidden', tab !== 'text');
+    document.getElementById('tab-file').classList.toggle('hidden', tab !== 'file');
+  }
+
+  function handleFileSelect(input) {
+    selectedFile = input.files[0];
+    document.getElementById('file-name').textContent = selectedFile ? `Selected: ${selectedFile.name}` : '';
+  }
+
+  // Drag-and-drop
+  const fileDrop = document.getElementById('file-drop');
+  fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+  fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+  fileDrop.addEventListener('drop', e => {
+    e.preventDefault();
+    fileDrop.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      selectedFile = file;
+      document.getElementById('file-name').textContent = `Selected: ${file.name}`;
+    }
+  });
+
+  function setStep(n) {
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`step-${i}`);
+      el.classList.remove('active', 'done');
+      if (i < n) el.classList.add('done');
+      if (i === n) el.classList.add('active');
+    }
+  }
+
+  async function runAnalysis() {
+    const btn = document.getElementById('analyze-btn');
+    const spinner = document.getElementById('analyze-spinner');
+    const status = document.getElementById('analyze-status');
+    const errBox = document.getElementById('analyze-error');
+
+    errBox.style.display = 'none';
+    btn.classList.add('loading');
+    btn.disabled = true;
+    setStep(2);
+    status.textContent = 'Extracting requirements…';
+
+    const formData = new FormData();
+    if (currentTab === 'file' && selectedFile) {
+      formData.append('rfp_file', selectedFile);
+    } else {
+      const text = document.getElementById('rfp-text').value.trim();
+      if (!text) {
+        showError(errBox, 'Please paste RFP text or upload a file.');
+        btn.classList.remove('loading'); btn.disabled = false; setStep(1);
+        return;
+      }
+      formData.append('rfp_text', text);
+    }
+
+    try {
+      const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
+
+      analysisResult = data;
+      setStep(3);
+      status.textContent = '';
+      renderResults(data);
+      document.getElementById('results-card').classList.remove('hidden');
+    } catch (e) {
+      showError(errBox, e.message);
+      setStep(1);
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function renderResults(data) {
+    const req = data.requirements;
+    const matched = data.matched;
+
+    // RFP meta
+    const meta = document.getElementById('rfp-meta');
+    meta.innerHTML = [
+      ['Program', req.program_name || '—'],
+      ['Agency', req.agency || '—'],
+      ['Solicitation', req.solicitation_number || '—'],
+      ['Period of Performance', req.period_of_performance || '—'],
+      ['Set-Aside', req.set_aside || '—'],
+      ['NAICS Codes', (req.naics_codes || []).join(', ') || '—'],
+    ].map(([k, v]) => `<div><span>${k}: </span><strong>${v}</strong></div>`).join('');
+
+    // Key themes
+    const themes = document.getElementById('key-themes');
+    themes.innerHTML = (req.key_themes || []).map(t => `<span class="tag tag-blue">${t}</span>`).join('');
+
+    // Tech reqs
+    const reqs = document.getElementById('tech-reqs');
+    reqs.innerHTML = (req.technical_requirements || []).map(r => `<li>${r}</li>`).join('');
+
+    // Eval criteria
+    const ec = document.getElementById('eval-criteria');
+    ec.innerHTML = (req.evaluation_criteria || []).map(c => `<span class="tag tag-orange">${c}</span>`).join('');
+
+    // Matched caps
+    const caps = document.getElementById('matched-caps');
+    caps.innerHTML = (matched.primary_capabilities || []).map(c => {
+      const score = c.relevance_score || 0;
+      const cls = score >= 7 ? 'score-high' : 'score-medium';
+      const diffs = (c.key_differentiators || []).map(d => `<li style="font-size:11px; color:#8b949e;">${d}</li>`).join('');
+      return `<div class="cap-item">
+        <div class="cap-item-header">
+          <span class="cap-name">${c.capability_name}</span>
+          <span class="score ${cls}">${score}/10</span>
+        </div>
+        <div class="cap-why">${c.why_relevant || ''}</div>
+        ${diffs ? `<ul style="padding-left:16px; margin-top:6px;">${diffs}</ul>` : ''}
+      </div>`;
+    }).join('');
+
+    // Win themes
+    const wt = document.getElementById('win-themes');
+    wt.innerHTML = (matched.win_themes || []).map(t => `<span class="tag tag-green">${t}</span>`).join('');
+
+    // Gaps
+    const gaps = matched.coverage_gaps || [];
+    if (gaps.length) {
+      document.getElementById('gaps-section').classList.remove('hidden');
+      document.getElementById('coverage-gaps').innerHTML = gaps.map(g => `<li>${g}</li>`).join('');
+    }
+  }
+
+  async function runDraft() {
+    if (!analysisResult) return;
+
+    const btn = document.getElementById('draft-btn');
+    const spinner = document.getElementById('draft-spinner');
+    const status = document.getElementById('draft-status');
+    const errBox = document.getElementById('draft-error');
+    const draftArea = document.getElementById('draft-area');
+
+    errBox.style.display = 'none';
+    btn.classList.add('loading');
+    btn.disabled = true;
+    setStep(4);
+    status.textContent = 'Generating draft…';
+
+    document.getElementById('draft-card').classList.remove('hidden');
+    draftArea.innerHTML = '<span class="draft-cursor"></span>';
+
+    let fullText = '';
+
+    try {
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requirements: analysisResult.requirements,
+          matched: analysisResult.matched,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Draft generation failed.');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') { draftArea.querySelector('.draft-cursor')?.remove(); break; }
+          try {
+            const obj = JSON.parse(payload);
+            if (obj.error) throw new Error(obj.error);
+            if (obj.text) {
+              fullText += obj.text;
+              draftArea.innerHTML = renderMarkdown(fullText) + '<span class="draft-cursor"></span>';
+              draftArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+          } catch (parseErr) { /* ignore partial JSON */ }
+        }
+      }
+
+      status.textContent = 'Draft complete.';
+      draftArea.querySelector('.draft-cursor')?.remove();
+    } catch (e) {
+      showError(errBox, e.message);
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function renderMarkdown(text) {
+    return text
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[hup])(.+)$/gm, '<p>$1</p>')
+      .replace(/<p><\/p>/g, '');
+  }
+
+  function copyDraft() {
+    const text = document.getElementById('draft-area').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy to Clipboard', 2000);
+    });
+  }
+
+  function showError(el, msg) {
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+</script>
+
+</body>
+</html>
