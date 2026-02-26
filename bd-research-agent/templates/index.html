@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOU Systems — BD Research Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+    header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
+    header .logo { font-size: 20px; font-weight: 700; color: #f0883e; }
+    header .subtitle { font-size: 13px; color: #8b949e; }
+    header .badge { margin-left: auto; background: #f0883e22; border: 1px solid #f0883e55; color: #f0883e; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+    .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; }
+    .card h2 { font-size: 13px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+
+    .check-group { display: flex; flex-direction: column; gap: 8px; }
+    .check-item { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+    .check-item input { margin-top: 2px; accent-color: #f0883e; cursor: pointer; }
+    .check-label { font-size: 13px; }
+    .check-label strong { display: block; font-weight: 600; color: #e6edf3; }
+    .check-label span { font-size: 11px; color: #8b949e; }
+
+    .form-row { display: flex; flex-direction: column; gap: 6px; }
+    .form-row label { font-size: 12px; color: #8b949e; font-weight: 500; }
+    input[type="text"], input[type="number"], select {
+      width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      padding: 8px 10px; color: #e6edf3; font-size: 13px; transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus { outline: none; border-color: #f0883e; }
+    .key-hint { font-size: 11px; color: #8b949e; margin-top: 4px; }
+
+    .btn { padding: 10px 18px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; width: 100%; justify-content: center; }
+    .btn-primary { background: #d29331; color: #0d1117; }
+    .btn-primary:hover { background: #f0883e; }
+    .btn-primary:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+    .btn-brief { background: #1f6feb; color: #fff; margin-top: 12px; }
+    .btn-brief:hover { background: #388bfd; }
+    .btn-brief:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+    .spinner { width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+    .loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .main-content { display: flex; flex-direction: column; gap: 16px; }
+
+    .status-bar { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #8b949e; display: flex; align-items: center; gap: 10px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #30363d; flex-shrink: 0; }
+    .status-dot.active { background: #f0883e; animation: pulse 1.2s ease-in-out infinite; }
+    .status-dot.done   { background: #3fb950; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .results-header h3 { font-size: 14px; font-weight: 600; }
+    .count-badge { font-size: 12px; background: #30363d; padding: 2px 8px; border-radius: 10px; color: #8b949e; }
+
+    .opp-grid { display: flex; flex-direction: column; gap: 10px; }
+
+    .opp-card { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px 16px; transition: border-color 0.15s; }
+    .opp-card:hover { border-color: #f0883e55; }
+    .opp-card.priority-high   { border-left: 3px solid #3fb950; }
+    .opp-card.priority-medium { border-left: 3px solid #f0883e; }
+    .opp-card.priority-low    { border-left: 3px solid #8b949e; }
+    .opp-card.priority-monitor{ border-left: 3px solid #58a6ff; }
+
+    .opp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .opp-title { font-size: 14px; font-weight: 600; color: #e6edf3; }
+    .score-badge { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+    .score-high   { background: #3fb95030; color: #3fb950; border: 1px solid #3fb95060; }
+    .score-medium { background: #f0883e30; color: #f0883e; border: 1px solid #f0883e60; }
+    .score-low    { background: #8b949e20; color: #8b949e; border: 1px solid #8b949e40; }
+
+    .opp-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .tag-agency  { background: #1f6feb20; border: 1px solid #1f6feb40; color: #58a6ff; }
+    .tag-naics   { background: #30363d; color: #8b949e; }
+    .tag-setaside{ background: #3fb95020; border: 1px solid #3fb95040; color: #3fb950; }
+    .tag-source  { background: #f0883e20; border: 1px solid #f0883e40; color: #f0883e; }
+    .tag-flag    { background: #da363020; border: 1px solid #da363040; color: #ff7b72; }
+    .tag-value   { background: #8250df20; border: 1px solid #8250df40; color: #d2a8ff; }
+
+    .opp-rationale { font-size: 13px; color: #c9d1d9; line-height: 1.5; margin-bottom: 6px; }
+    .opp-factors { font-size: 12px; color: #8b949e; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+    .opp-factors li::before { content: "→ "; color: #f0883e; }
+
+    .error-box { background: #da363022; border: 1px solid #da363055; border-radius: 8px; padding: 10px 14px; color: #ff7b72; font-size: 13px; display: none; }
+
+    .brief-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 24px; }
+    .brief-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .brief-header h2 { font-size: 15px; font-weight: 600; }
+    #brief-area { font-size: 14px; line-height: 1.75; color: #c9d1d9; min-height: 100px; }
+    #brief-area h2 { font-size: 16px; font-weight: 700; color: #f0883e; margin: 20px 0 8px; }
+    #brief-area h3 { font-size: 14px; font-weight: 600; color: #e6edf3; margin: 14px 0 6px; }
+    #brief-area strong { color: #e6edf3; }
+    #brief-area ul { margin: 6px 0 12px 20px; }
+    #brief-area ol { margin: 6px 0 12px 20px; }
+    #brief-area li { margin-bottom: 4px; }
+    #brief-area p  { margin-bottom: 10px; }
+    .brief-cursor { display: inline-block; width: 2px; height: 1em; background: #f0883e; animation: blink 0.8s step-end infinite; vertical-align: text-bottom; margin-left: 1px; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .copy-btn { padding: 5px 12px; border-radius: 6px; border: 1px solid #30363d; background: transparent; color: #8b949e; font-size: 12px; cursor: pointer; }
+    .copy-btn:hover { border-color: #f0883e; color: #f0883e; }
+
+    .empty-state { text-align: center; padding: 48px 24px; color: #8b949e; font-size: 14px; }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">NOU Systems — BD Research Agent</div>
+    <div class="subtitle">Live market intelligence from SAM.gov &amp; USASpending.gov</div>
+  </div>
+  <div class="badge">Demo</div>
+</header>
+
+<div class="container">
+  <div class="layout">
+
+    <!-- Sidebar: filters -->
+    <div class="sidebar">
+      <div class="card">
+        <h2>Focus Areas</h2>
+        <div class="check-group" id="focus-checks">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Filters</h2>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div class="form-row">
+            <label>Days Back</label>
+            <input type="number" id="days-back" value="180" min="30" max="730" />
+          </div>
+          <div class="form-row">
+            <label>Results per Source</label>
+            <input type="number" id="result-limit" value="25" min="5" max="50" />
+          </div>
+          <div class="form-row">
+            <label>Set-Aside Filter</label>
+            <select id="set-aside">
+              <option value="">All (no filter)</option>
+              <option value="SBA">Small Business (SBA)</option>
+              <option value="8A">8(a)</option>
+              <option value="WOSB">WOSB</option>
+              <option value="HZC">HUBZone</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>SAM.gov API Key</h2>
+        <div class="form-row">
+          <input type="text" id="sam-key" placeholder="Optional — paste key here" />
+        </div>
+        <div class="key-hint">Free key at <strong>sam.gov/profile</strong> → API Keys<br>Without a key, only USASpending.gov data is used.</div>
+      </div>
+
+      <button class="btn btn-primary" id="research-btn" onclick="runResearch()">
+        <div class="spinner" id="research-spinner"></div>
+        Run BD Research
+      </button>
+    </div>
+
+    <!-- Main content -->
+    <div class="main-content">
+
+      <!-- Status bar -->
+      <div class="status-bar">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Configure filters and click Run BD Research.</span>
+      </div>
+
+      <!-- Errors -->
+      <div class="error-box" id="error-box"></div>
+
+      <!-- Opportunity results -->
+      <div class="card hidden" id="results-card">
+        <div class="results-header">
+          <h3>Scored Opportunities</h3>
+          <span class="count-badge" id="count-badge">0 results</span>
+        </div>
+        <div class="opp-grid" id="opp-grid">
+          <div class="empty-state"><div class="icon">🔍</div>No results yet.</div>
+        </div>
+
+        <button class="btn btn-brief" id="brief-btn" onclick="runBrief()" disabled>
+          <div class="spinner" id="brief-spinner"></div>
+          Generate BD Intelligence Brief
+        </button>
+      </div>
+
+      <!-- Brief -->
+      <div class="brief-card hidden" id="brief-card">
+        <div class="brief-header">
+          <h2>BD Intelligence Brief</h2>
+          <button class="copy-btn" onclick="copyBrief()">Copy</button>
+        </div>
+        <div id="brief-area"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Populated by Jinja2
+  const FOCUS_PROFILES = {{ focus_areas | tojson }};
+
+  let researchResult = null;
+
+  // Build focus area checkboxes
+  const checksEl = document.getElementById('focus-checks');
+  for (const [key, profile] of Object.entries(FOCUS_PROFILES)) {
+    const label = document.createElement('label');
+    label.className = 'check-item';
+    label.innerHTML = `
+      <input type="checkbox" value="${key}" checked />
+      <span class="check-label">
+        <strong>${profile.label}</strong>
+        <span>${profile.codes.join(', ')}</span>
+      </span>`;
+    checksEl.appendChild(label);
+  }
+
+  function getSelectedAreas() {
+    return [...document.querySelectorAll('#focus-checks input:checked')].map(c => c.value);
+  }
+
+  function setStatus(text, state) {
+    document.getElementById('status-text').textContent = text;
+    const dot = document.getElementById('status-dot');
+    dot.className = 'status-dot' + (state === 'active' ? ' active' : state === 'done' ? ' done' : '');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function clearError() {
+    const el = document.getElementById('error-box');
+    el.style.display = 'none';
+  }
+
+  async function runResearch() {
+    const btn = document.getElementById('research-btn');
+    const briefBtn = document.getElementById('brief-btn');
+    clearError();
+    btn.classList.add('loading');
+    btn.disabled = true;
+    briefBtn.disabled = true;
+    setStatus('Fetching opportunities from USASpending.gov…', 'active');
+
+    const areas = getSelectedAreas();
+    if (!areas.length) {
+      showError('Select at least one focus area.');
+      btn.classList.remove('loading'); btn.disabled = false;
+      setStatus('', ''); return;
+    }
+
+    const body = {
+      focus_areas: areas,
+      days_back: parseInt(document.getElementById('days-back').value) || 180,
+      limit: parseInt(document.getElementById('result-limit').value) || 25,
+      sam_api_key: document.getElementById('sam-key').value.trim() || null,
+      set_aside_filter: document.getElementById('set-aside').value ? [document.getElementById('set-aside').value] : null,
+    };
+
+    try {
+      const res = await fetch('/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Research failed.');
+
+      researchResult = data;
+
+      const samMsg = data.sam_status === 'not_configured'
+        ? ' (SAM.gov: no key)'
+        : data.sam_status === 'invalid_key'
+        ? ' (SAM.gov: invalid key)'
+        : ` (SAM.gov: ${data.sam_status})`;
+
+      setStatus(`Found ${data.raw_count} items, scored ${data.scored.length} opportunities.${samMsg}`, 'done');
+
+      if (data.errors.length) showError('Warnings: ' + data.errors.join('; '));
+
+      renderOpportunities(data.scored);
+      document.getElementById('results-card').classList.remove('hidden');
+      document.getElementById('count-badge').textContent = `${data.scored.length} results`;
+      briefBtn.disabled = data.scored.length === 0;
+
+    } catch (e) {
+      showError(e.message);
+      setStatus('Error during research.', '');
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function renderOpportunities(scored) {
+    const grid = document.getElementById('opp-grid');
+    if (!scored.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="icon">🔍</div>No results found for selected filters.</div>';
+      return;
+    }
+
+    grid.innerHTML = scored.map(opp => {
+      const score = opp.pursuit_score || 0;
+      const scoreCls = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
+      const priorityCls = (opp.priority || '').toLowerCase().replace(' ', '-');
+      const value = opp.estimated_value_m ? `$${opp.estimated_value_m}M` : null;
+      const flags = (opp.flags || []).map(f => `<span class="tag tag-flag">${f}</span>`).join('');
+      const factors = (opp.key_factors || []).map(f => `<li>${f}</li>`).join('');
+
+      return `<div class="opp-card priority-${priorityCls}">
+        <div class="opp-top">
+          <div class="opp-title">${opp.title || opp.id || 'Untitled'}</div>
+          <div class="score-badge ${scoreCls}">${score}</div>
+        </div>
+        <div class="opp-meta">
+          ${opp.agency_short ? `<span class="tag tag-agency">${opp.agency_short}</span>` : ''}
+          ${opp.naics ? `<span class="tag tag-naics">NAICS ${opp.naics}</span>` : ''}
+          ${opp.set_aside && opp.set_aside !== 'Full & Open' ? `<span class="tag tag-setaside">${opp.set_aside}</span>` : ''}
+          ${value ? `<span class="tag tag-value">${value}</span>` : ''}
+          ${opp.deadline ? `<span class="tag tag-naics">Due: ${opp.deadline}</span>` : ''}
+          <span class="tag tag-source">${opp.priority || 'Monitor'}</span>
+          ${flags}
+        </div>
+        <div class="opp-rationale">${opp.rationale || ''}</div>
+        ${factors ? `<ul class="opp-factors">${factors}</ul>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  async function runBrief() {
+    if (!researchResult) return;
+    const btn = document.getElementById('brief-btn');
+    const briefArea = document.getElementById('brief-area');
+    clearError();
+    btn.classList.add('loading'); btn.disabled = true;
+    setStatus('Generating BD Intelligence Brief…', 'active');
+
+    document.getElementById('brief-card').classList.remove('hidden');
+    briefArea.innerHTML = '<span class="brief-cursor"></span>';
+
+    let fullText = '';
+    try {
+      const res = await fetch('/api/brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scored: researchResult.scored,
+          focus_areas: getSelectedAreas(),
+          naics_codes: researchResult.naics_codes,
+        }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') { briefArea.querySelector('.brief-cursor')?.remove(); break; }
+          try {
+            const obj = JSON.parse(payload);
+            if (obj.error) throw new Error(obj.error);
+            if (obj.text) {
+              fullText += obj.text;
+              briefArea.innerHTML = renderMarkdown(fullText) + '<span class="brief-cursor"></span>';
+              briefArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+          } catch (_) {}
+        }
+      }
+      setStatus('Brief complete.', 'done');
+      briefArea.querySelector('.brief-cursor')?.remove();
+    } catch (e) {
+      showError(e.message);
+      setStatus('Error generating brief.', '');
+    } finally {
+      btn.classList.remove('loading'); btn.disabled = false;
+    }
+  }
+
+  function renderMarkdown(text) {
+    return text
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[hup])(.+)$/gm, '<p>$1</p>')
+      .replace(/<p><\/p>/g, '');
+  }
+
+  function copyBrief() {
+    const text = document.getElementById('brief-area').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+</script>
+
+</body>
+</html>
