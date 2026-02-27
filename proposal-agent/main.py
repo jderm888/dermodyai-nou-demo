@@ -7,6 +7,9 @@ import json
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
