@@ -11,6 +11,9 @@ import json
 import re
 from typing import AsyncIterator
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import anthropic
 
 from naics_config import NAICS_PROFILES
