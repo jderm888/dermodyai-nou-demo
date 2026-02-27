@@ -7,6 +7,9 @@ import json
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()  # loads ANTHROPIC_API_KEY (and any other vars) from .env
+
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
