@@ -9,6 +9,8 @@ then produces:
 
 import json
 import re
+import sys
+import traceback
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
@@ -83,17 +85,22 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
     sample = opportunities[:30]
     data_str = json.dumps(sample, indent=2, default=str)
 
-    response = _client.messages.create(
-        model=MODEL,
-        max_tokens=8192,
-        system=SCORE_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": SCORE_USER.format(company=COMPANY_CONTEXT, data=data_str),
-            }
-        ],
-    )
+    try:
+        response = _client.messages.create(
+            model=MODEL,
+            max_tokens=8192,
+            system=SCORE_SYSTEM,
+            messages=[
+                {
+                    "role": "user",
+                    "content": SCORE_USER.format(company=COMPANY_CONTEXT, data=data_str),
+                }
+            ],
+        )
+    except Exception:
+        print("ERROR in score_opportunities — Claude API call failed:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return [{"api_error": "Claude API call failed — see server stderr for details"}]
     raw = response.content[0].text.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)

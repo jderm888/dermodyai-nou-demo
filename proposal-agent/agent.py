@@ -9,6 +9,9 @@ import json
 import re
 from typing import AsyncIterator
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import anthropic
 
 from capabilities import get_capabilities_for_matching
@@ -159,36 +162,70 @@ Be specific — reference actual capability names, methodologies, and tools. Avo
 methodologies, tools, and how we address each key requirement.)
 
 ## Management Approach
-(Program management structure, staffing approach, risk management, quality assurance)
+(Program management structure, staffing plan, team org chart narrative, risk management,
+communication cadence, and transition-in plan)
+
+## Quality Assurance
+(QA/QC methodology, process controls, metrics and reporting, deliverable review process,
+compliance with government QA requirements; reference ISO 9001 or CMMI if applicable)
 
 ## Relevant Experience & Past Performance
 (2-3 relevant program examples — use [PLACEHOLDER] for actual contract numbers, but describe
-the type of work and outcomes realistically)
+the type of work, scope, and measurable outcomes realistically)
 
 ## Why NOU Systems
-(1-2 paragraphs: our unique value proposition for this specific opportunity)
+(1-2 paragraphs: our unique value proposition for this specific opportunity — small business
+agility, deep Huntsville/Redstone Arsenal presence, relevant certifications, and commitment
+to mission success)
+
+## Footer
+(One-line document control: Company — NOU Systems | Program — {program_name} |
+Solicitation — [SOLICITATION NUMBER] | Prepared: [DATE] |
+PROPRIETARY — For Government Use Only)
 """
 
 
 async def stream_draft(
     requirements: dict, matched: dict
-) -> AsyncIterator[str]:
+) -> AsyncIterator[dict]:
     """Async generator that streams proposal draft text token by token."""
     program = requirements.get("program_name") or "This Opportunity"
     agency = requirements.get("agency") or "the Government"
 
+    # Compress: drop fields unused in prose generation to reduce prompt tokens
+    req_slim = {k: requirements[k] for k in (
+        "program_name", "agency", "technical_requirements",
+        "evaluation_criteria", "deliverables", "period_of_performance",
+        "set_aside", "key_themes",
+    ) if k in requirements}
+
+    matched_slim = {
+        "primary_capabilities": [
+            {
+                "capability_name": c.get("capability_name"),
+                "key_differentiators": c.get("key_differentiators", []),
+            }
+            for c in matched.get("primary_capabilities", [])
+        ],
+        "win_themes": matched.get("win_themes", []),
+        "coverage_gaps": matched.get("coverage_gaps", []),
+        "recommended_teaming": matched.get("recommended_teaming", ""),
+    }
+
     prompt = DRAFT_USER.format(
         program_name=program,
         agency=agency,
-        requirements_json=json.dumps(requirements, indent=2),
-        matched_json=json.dumps(matched, indent=2),
+        requirements_json=json.dumps(req_slim, indent=2),
+        matched_json=json.dumps(matched_slim, indent=2),
     )
 
     async with _async_client.messages.stream(
         model=MODEL,
-        max_tokens=8192,
+        max_tokens=64000,
         system=DRAFT_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         async for text in stream.text_stream:
-            yield text
+            yield {"text": text}
+        final = await stream.get_final_message()
+        yield {"stop_reason": final.stop_reason}

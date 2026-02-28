@@ -24,7 +24,7 @@ def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
     return full_text
 
 
-def truncate_rfp(text: str, max_chars: int = 40_000) -> tuple[str, bool]:
+def truncate_rfp(text: str, max_chars: int = 200_000) -> tuple[str, bool]:
     """
     Truncate RFP text to avoid exceeding context limits.
     Returns (truncated_text, was_truncated).

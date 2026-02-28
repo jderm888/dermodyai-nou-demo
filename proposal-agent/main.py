@@ -100,10 +100,8 @@ async def draft(request: Request):
 
     async def event_stream():
         try:
-            async for chunk in agent.stream_draft(requirements, matched):
-                # SSE format
-                data = json.dumps({"text": chunk})
-                yield f"data: {data}\n\n"
+            async for event in agent.stream_draft(requirements, matched):
+                yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         yield "data: [DONE]\n\n"
