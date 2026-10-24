@@ -1,197 +1,300 @@
-"""
-BD Research Agent — Claude-powered analysis layer.
+"""Score source records from 1 to 5.
 
-Takes raw opportunity/award data from SAM.gov and USASpending.gov,
-then produces:
-  1. Per-opportunity pursuit scores + rationale (JSON)
-  2. A streaming BD Intelligence Brief (Markdown)
+Facts (amounts, recipients, award numbers, dates) are copied from the source
+record. The model may only return an id, a 1–5 score, a rationale, and factors.
 """
+
+from __future__ import annotations
 
 import json
+import os
 import re
-import sys
-import traceback
-from typing import AsyncIterator
+from dataclasses import dataclass, field
 
-from dotenv import load_dotenv
-load_dotenv()
-
-import anthropic
-
-from naics_config import NAICS_PROFILES
+from brief import claim_violations
+from profile import ContractorProfile
+from rubric import RUBRIC, InvalidScore, coerce_score, priority_for_score, rubric_prompt_block
+from signals import derive_signals
 
 MODEL = "claude-sonnet-4-6"
+MAX_SCORED = 30
 
-_client = anthropic.Anthropic()
-_async_client = anthropic.AsyncAnthropic()
-
-COMPANY_CONTEXT = """
-NOU Systems is a small defense contractor headquartered in Huntsville, AL.
-Core competencies:
-- Systems Engineering & MBSE (SysML, DOORS NG, Cameo)
-- Modeling & Simulation (LVC, HLA/DIS, AFSIM, physics-based)
-- Cybersecurity & RMF (NIST, DISA STIG, ATO support, Zero Trust)
-- Digital Engineering (digital twins, digital thread, MOSA)
-- Test & Evaluation (TEMP, DT&E/OT&E support, data analysis)
-
-Typical contracts: $1M–$50M, 3–5 year PoP, prime or major sub
-Target agencies: Army (RDECOM/AFC/PEO), Air Force (AFLCMC, AFRL), MDA, DARPA
-Strong Huntsville presence; can support Redstone Arsenal programs
-Small business — eligible for SBA, 8(a), WOSB set-asides
-"""
+SCORE_SYSTEM = """You are a BD analyst scoring contract records for fit with one contractor profile.
+Use only the records and the profile in the user message. Do not invent award numbers, dollar amounts, incumbents, or records.
+Respond with a JSON array only — no markdown fences."""
 
 
-# ---------------------------------------------------------------------------
-# Step 1: Score and classify opportunities
-# ---------------------------------------------------------------------------
+def build_score_prompt(profile: ContractorProfile, records: list[dict]) -> str:
+    payload = [_prompt_record(record) for record in records[:MAX_SCORED]]
+    return f"""Evaluate these source records for the contractor profile.
 
-SCORE_SYSTEM = """You are a BD analyst for a defense contractor. Your job is to
-evaluate contract opportunities and awards for strategic fit. Be concise and realistic.
-Respond with valid JSON only — no markdown fences."""
+CONTRACTOR PROFILE:
+{profile.to_prompt()}
 
-SCORE_USER = """Evaluate these contract opportunities/awards for NOU Systems.
+{rubric_prompt_block()}
 
-COMPANY PROFILE:
-{company}
+SOURCE RECORDS (cite these ids exactly; do not add records):
+{json.dumps(payload, indent=2, default=str)}
 
-OPPORTUNITIES/AWARDS DATA:
-{data}
-
-For each item, return a JSON array where each element has:
+Return a JSON array. Each element must be:
 {{
-  "id": "the award_id or notice_id or sol_number",
-  "title": "short title (max 60 chars)",
-  "pursuit_score": 1-10,
-  "priority": "High" | "Medium" | "Low" | "Monitor",
-  "rationale": "1-2 sentences on fit",
-  "key_factors": ["2-3 bullet factors"],
-  "estimated_value_m": estimated value in $M as a number or null,
-  "deadline": "response deadline or end date, or null",
-  "agency_short": "short agency name",
-  "naics": "NAICS code",
-  "set_aside": "set-aside type or 'Full & Open'",
-  "flags": ["list of notable flags: e.g. 'Recompete', 'Incumbent Risk', 'Expiring Soon', 'AL location', 'Small Biz Only']"
+  "id": "the id field copied from one source record",
+  "pursuit_score": 1,
+  "rationale": "1-2 sentences on profile fit only",
+  "key_factors": ["up to 3 short factors drawn from the profile and that record"]
 }}
 
-Return ONLY the JSON array, nothing else."""
+Do not include dollar amounts, award numbers, or incumbent names in the rationale or key factors.
+Do not estimate a value. Do not add flags. Pursuit_score must be an integer from 1 to 5.
+Return ONLY the JSON array."""
 
 
-def score_opportunities(opportunities: list[dict]) -> list[dict]:
-    """Score a list of opportunities/awards for NOU Systems fit."""
-    if not opportunities:
-        return []
-
-    # Trim to avoid token overflow — send up to 30 items
-    sample = opportunities[:30]
-    data_str = json.dumps(sample, indent=2, default=str)
-
-    try:
-        response = _client.messages.create(
-            model=MODEL,
-            max_tokens=8192,
-            system=SCORE_SYSTEM,
-            messages=[
-                {
-                    "role": "user",
-                    "content": SCORE_USER.format(company=COMPANY_CONTEXT, data=data_str),
-                }
-            ],
-        )
-    except Exception:
-        print("ERROR in score_opportunities — Claude API call failed:", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
-        return [{"api_error": "Claude API call failed — see server stderr for details"}]
-    raw = response.content[0].text.strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    try:
-        scored = json.loads(raw)
-        if isinstance(scored, list):
-            return sorted(scored, key=lambda x: x.get("pursuit_score", 0), reverse=True)
-        return scored
-    except json.JSONDecodeError:
-        return [{"parse_error": raw[:300]}]
+def _prompt_record(record: dict) -> dict:
+    return {
+        "id": record.get("id"),
+        "source": record.get("source"),
+        "record_type": record.get("record_type"),
+        "title": record.get("title") or "",
+        "agency": record.get("agency") or "",
+        "sub_agency": record.get("sub_agency") or "",
+        "naics_code": record.get("naics_code") or "",
+        "set_aside": record.get("set_aside") or "",
+        "description": (record.get("description") or "")[:500],
+        "deadline": record.get("deadline") or "",
+        "end_date": record.get("end_date") or "",
+        "recipient": record.get("recipient") or "",
+        "amount": record.get("amount"),
+        "award_number": record.get("award_number") or "",
+    }
 
 
-# ---------------------------------------------------------------------------
-# Step 2: Stream BD Intelligence Brief
-# ---------------------------------------------------------------------------
+def complete_json(system: str, user: str) -> str:
+    """Call Claude. Imported lazily so tests and missing-key runs can import this module."""
+    import anthropic
 
-BRIEF_SYSTEM = """You are a senior BD strategist for a defense contractor in Huntsville, AL.
-Write sharp, actionable intelligence briefs. Be specific. Avoid filler."""
-
-BRIEF_USER = """Write a BD Intelligence Brief for NOU Systems based on this market data.
-
-COMPANY PROFILE:
-{company}
-
-FOCUS AREAS: {focus_areas}
-
-SCORED OPPORTUNITIES (top results):
-{scored_json}
-
-MARKET CONTEXT (USASpending award totals by sub-agency):
-{market_context}
-
----
-Write the following sections in Markdown:
-
-## Executive Summary
-(2-3 sentences: what the data shows, top takeaway)
-
-## Top Pursuit Opportunities
-(For each High/Medium priority item: 1 paragraph with the opportunity name bolded,
-why it fits NOU, key risks, recommended next action)
-
-## Market Landscape
-(What the award data tells us about spending trends, dominant primes/incumbents,
-and where NOU can win)
-
-## Recommended BD Actions
-(Numbered list of 5-7 specific, actionable steps NOU should take in the next 30-60 days)
-
-## Watch List
-(Brief notes on Monitor-priority items worth tracking)
-"""
-
-
-async def stream_brief(
-    scored: list[dict],
-    market_context: str,
-    focus_areas: list[str],
-) -> AsyncIterator[str]:
-    """Async generator: streams the BD Intelligence Brief."""
-    areas_str = ", ".join(focus_areas) if focus_areas else "all focus areas"
-    top = [s for s in scored if s.get("priority") in ("High", "Medium")][:15]
-
-    async with _async_client.messages.stream(
+    client = anthropic.Anthropic()
+    response = client.messages.create(
         model=MODEL,
         max_tokens=8192,
-        system=BRIEF_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": BRIEF_USER.format(
-                    company=COMPANY_CONTEXT,
-                    focus_areas=areas_str,
-                    scored_json=json.dumps(top, indent=2, default=str),
-                    market_context=market_context,
-                ),
-            }
-        ],
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    return response.content[0].text
 
 
-def build_market_context(agency_spending: dict) -> str:
-    """Convert USASpending category data into a readable string for the brief."""
-    results = agency_spending.get("results", [])
-    if not results:
-        return "No aggregate spending data available."
-    lines = ["Top DoD sub-agencies by contract spend (selected NAICS):"]
-    for r in results[:10]:
-        name = r.get("name", "Unknown")
-        amount = r.get("aggregated_amount", 0)
-        lines.append(f"  - {name}: ${amount:,.0f}")
-    return "\n".join(lines)
+def parse_model_scores(raw: str) -> list:
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    data = json.loads(text)
+    if isinstance(data, dict):
+        for key in ("scores", "items", "opportunities", "results"):
+            if isinstance(data.get(key), list):
+                data = data[key]
+                break
+        else:
+            raise ValueError("model JSON was not a list")
+    if not isinstance(data, list):
+        raise ValueError("model JSON was not a list")
+    return data
+
+
+def _index_records(records: list[dict]) -> dict[str, dict]:
+    indexed: dict[str, dict] = {}
+    for record in records:
+        indexed.setdefault(record["id"], record)
+        for alias in record.get("aliases") or []:
+            if alias:
+                indexed.setdefault(alias, record)
+    return indexed
+
+
+def _allowed_ids(records: list[dict]) -> set[str]:
+    allowed: set[str] = set()
+    for record in records:
+        if record.get("id"):
+            allowed.add(str(record["id"]))
+        for alias in record.get("aliases") or []:
+            if alias:
+                allowed.add(str(alias))
+        if record.get("award_number"):
+            allowed.add(str(record["award_number"]))
+    return allowed
+
+
+def rule_score_record(record: dict, profile: ContractorProfile) -> tuple[int, str, list[str]]:
+    """Same 1–5 bands as the model rubric, using only profile overlap that is visible on the record."""
+    matches: list[str] = []
+    naics = str(record.get("naics_code") or "")
+    if naics and naics in set(profile.all_naics()):
+        matches.append(f"NAICS {naics} is on the contractor profile")
+    agency_text = f"{record.get('agency') or ''} {record.get('sub_agency') or ''}".lower()
+    # SAM.gov often abbreviates "Department" as "DEPT". Expand it before matching.
+    agency_text = re.sub(r"\bdept\b", "department", agency_text)
+    for agency in profile.agencies:
+        if agency and agency.lower() in agency_text:
+            matches.append(f"agency text matches profile agency {agency}")
+            break
+    blob = f"{record.get('title') or ''} {record.get('description') or ''}".lower()
+    for keyword in profile.keywords:
+        if keyword and keyword.lower() in blob:
+            matches.append(f"keyword {keyword!r} appears in the source title or description")
+            break
+    set_aside = (record.get("set_aside") or "").lower()
+    for code in profile.set_asides:
+        if code and code.lower() in set_aside:
+            matches.append(f"set-aside text matches profile set-aside {code}")
+            break
+    score = min(5, 1 + len(matches))
+    if matches:
+        rationale = f"Score {score}/5. Profile checks that matched: {', '.join(matches)}."
+    else:
+        rationale = (
+            f"Score {score}/5. None of the profile checks "
+            "(NAICS, agency, keyword, set-aside) matched this record."
+        )
+    return score, rationale, matches[:3]
+
+
+def assemble_item(
+    record: dict,
+    score: int,
+    rationale: str,
+    factors: list[str],
+    method: str,
+    today=None,
+) -> dict:
+    signals = derive_signals(record, today=today)
+    amount = record.get("amount")
+    return {
+        "id": record["id"],
+        "title": record.get("title") or record["id"],
+        "pursuit_score": score,
+        "priority": priority_for_score(score),
+        "rubric": RUBRIC[score],
+        "rationale": rationale,
+        "key_factors": factors,
+        "scoring_method": method,
+        "source": record.get("source") or "",
+        "record_type": record.get("record_type") or "",
+        "url": record.get("url") or "",
+        "agency": record.get("agency") or "",
+        "sub_agency": record.get("sub_agency") or "",
+        "naics": record.get("naics_code") or "",
+        "set_aside": record.get("set_aside") or "",
+        "amount": amount,
+        "deadline": record.get("deadline") or "",
+        "end_date": record.get("end_date") or "",
+        "recipient": record.get("recipient") or "",
+        "award_number": record.get("award_number") or "",
+        "description_url": record.get("description_url") or "",
+        "flags": signals,
+        "flag_labels": [signal["flag"] for signal in signals],
+    }
+
+
+@dataclass
+class ScoringOutcome:
+    items: list[dict] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    method: str = "none"
+
+
+def score_opportunities(
+    records: list[dict],
+    profile: ContractorProfile,
+    complete_fn=None,
+    today=None,
+) -> ScoringOutcome:
+    """Score records. Invalid model scores are dropped and replaced with the rules rubric."""
+    if not records:
+        return ScoringOutcome(items=[], errors=[], method="none")
+
+    working = list(records)
+    errors: list[str] = []
+    if len(working) > MAX_SCORED:
+        errors.append(f"Only the first {MAX_SCORED} records were scored.")
+        working = working[:MAX_SCORED]
+
+    indexed = _index_records(working)
+    allowed_ids = _allowed_ids(working)
+    allowed_recipients = {record["recipient"] for record in working if record.get("recipient")}
+    model_scores: dict[str, tuple[int, str, list[str]]] = {}
+    use_rules_only = False
+
+    if complete_fn is None and not os.getenv("ANTHROPIC_API_KEY"):
+        use_rules_only = True
+        errors.append(
+            "ANTHROPIC_API_KEY is not set. Scores use the 1-5 rules rubric instead of the language model."
+        )
+    else:
+        fn = complete_fn or complete_json
+        try:
+            parsed = parse_model_scores(fn(SCORE_SYSTEM, build_score_prompt(profile, working)))
+        except Exception as exc:
+            use_rules_only = True
+            parsed = []
+            errors.append(
+                f"Language model scoring failed ({type(exc).__name__}). "
+                "Scores use the 1-5 rules rubric instead."
+            )
+        if not use_rules_only:
+            for entry in parsed:
+                if not isinstance(entry, dict):
+                    errors.append("Ignored a non-object score entry.")
+                    continue
+                raw_id = str(entry.get("id") or "").strip()
+                record = indexed.get(raw_id)
+                if record is None:
+                    errors.append(f"Ignored model score for unknown id {raw_id!r}.")
+                    continue
+                try:
+                    score = coerce_score(entry.get("pursuit_score"))
+                except InvalidScore as exc:
+                    errors.append(f"Record {record['id']}: {exc}. Rules score applied.")
+                    continue
+                rationale = str(entry.get("rationale") or "").strip()
+                raw_factors = entry.get("key_factors") or []
+                if not isinstance(raw_factors, list):
+                    raw_factors = []
+                factors = [str(item).strip() for item in raw_factors if str(item).strip()]
+                violations = claim_violations(
+                    " ".join([rationale, *factors]),
+                    allowed_ids=allowed_ids,
+                    allowed_recipients=allowed_recipients,
+                )
+                if violations:
+                    errors.append(
+                        f"Record {record['id']}: model rationale omitted ({'; '.join(violations)})."
+                    )
+                    rationale = (
+                        "Rationale omitted because it cited data that is not in the source records."
+                    )
+                    factors = []
+                # First accepted score for a record wins. Facts still come from the record.
+                model_scores.setdefault(record["id"], (score, rationale, factors))
+
+    items = []
+    methods: set[str] = set()
+    for record in working:
+        if record["id"] in model_scores:
+            score, rationale, factors = model_scores[record["id"]]
+            method = "llm"
+        else:
+            score, rationale, factors = rule_score_record(record, profile)
+            method = "rules"
+            if not use_rules_only and not any(record["id"] in error for error in errors):
+                errors.append(f"Record {record['id']} was not scored by the model. Rules score applied.")
+        methods.add(method)
+        items.append(assemble_item(record, score, rationale, factors, method, today=today))
+
+    items.sort(key=lambda item: item["pursuit_score"], reverse=True)
+    if methods == {"llm"}:
+        method_name = "llm"
+    elif methods == {"rules"}:
+        method_name = "rules"
+    elif not methods:
+        method_name = "none"
+    else:
+        method_name = "mixed"
+    return ScoringOutcome(items=items, errors=errors, method=method_name)

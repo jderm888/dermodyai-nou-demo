@@ -1,0 +1,54 @@
+name: BD daily research
+
+# Manual only. This workflow does not register a schedule and does not deploy.
+# Run it from the Actions tab after SAM_GOV_API_KEY and ANTHROPIC_API_KEY
+# are stored as repository secrets. Until then the job exits without calling
+# SAM.gov, USASpending, or the language model.
+# See bd-research-agent/DEMO.md before adding any schedule.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip when credentials are not configured
+        id: gate
+        env:
+          SAM_GOV_API_KEY: ${{ secrets.SAM_GOV_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SAM_GOV_API_KEY}" ] && [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "SAM_GOV_API_KEY and ANTHROPIC_API_KEY are both unset."
+            echo "The daily run stays disabled. No SAM.gov, USASpending, or model request will be made."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
+        working-directory: bd-research-agent
+        run: pip install -r requirements.txt
+
+      - name: Run one research pass
+        if: steps.gate.outputs.enabled == 'true'
+        working-directory: bd-research-agent
+        env:
+          SAM_GOV_API_KEY: ${{ secrets.SAM_GOV_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scheduler.py --output-dir "${RUNNER_TEMP}/bd-output" --days-back 2

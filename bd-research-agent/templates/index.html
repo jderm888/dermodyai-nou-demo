@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NOU Systems — BD Research Agent</title>
+  <title>BD Research Agent</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
@@ -73,7 +73,11 @@
 
     .opp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
     .opp-title { font-size: 14px; font-weight: 600; color: #e6edf3; }
-    .score-badge { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+    .score-badge { flex-shrink: 0; min-width: 44px; height: 28px; padding: 0 8px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+    .banner { background: #f0883e14; border: 1px solid #f0883e55; color: #f0d0a0; border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+    .rubric-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .rubric-list li { font-size: 12px; color: #c9d1d9; line-height: 1.4; }
+    .rubric-list strong { color: #f0883e; }
     .score-high   { background: #3fb95030; color: #3fb950; border: 1px solid #3fb95060; }
     .score-medium { background: #f0883e30; color: #f0883e; border: 1px solid #f0883e60; }
     .score-low    { background: #8b949e20; color: #8b949e; border: 1px solid #8b949e40; }
@@ -120,13 +124,17 @@
 
 <header>
   <div>
-    <div class="logo">NOU Systems — BD Research Agent</div>
-    <div class="subtitle">Live market intelligence from SAM.gov &amp; USASpending.gov</div>
+    <div class="logo">BD Research Agent</div>
+    <div class="subtitle">SAM.gov solicitations and USASpending.gov awards, scored 1–5</div>
   </div>
   <div class="badge">Demo</div>
 </header>
 
 <div class="container">
+  <div class="banner">
+    {% if profile.example_data %}Example profile{% else %}Profile{% endif %}:
+    <strong>{{ profile.name }}</strong>. {{ profile.disclaimer }}
+  </div>
   <div class="layout">
 
     <!-- Sidebar: filters -->
@@ -163,11 +171,20 @@
       </div>
 
       <div class="card">
+        <h2>Score rubric (1–5)</h2>
+        <ul class="rubric-list">
+          {% for level in rubric %}
+          <li><strong>{{ level.score }} · {{ level.priority }}</strong> — {{ level.text }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="card">
         <h2>SAM.gov API Key</h2>
         <div class="form-row">
-          <input type="text" id="sam-key" placeholder="Optional — paste key here" />
+          <input type="password" id="sam-key" placeholder="Optional — overrides the server env var" autocomplete="off" />
         </div>
-        <div class="key-hint">Free key at <strong>sam.gov/profile</strong> → API Keys<br>Without a key, only USASpending.gov data is used.</div>
+        <div class="key-hint">Sent as <strong>api_key</strong> on each SAM.gov request. If this box is empty, the server uses <strong>SAM_GOV_API_KEY</strong>. If that is also unset, solicitation search is skipped and the page says so. USASpending.gov does not need a key.</div>
       </div>
 
       <button class="btn btn-primary" id="research-btn" onclick="runResearch()">
@@ -182,7 +199,7 @@
       <!-- Status bar -->
       <div class="status-bar">
         <div class="status-dot" id="status-dot"></div>
-        <span id="status-text">Configure filters and click Run BD Research.</span>
+        <span id="status-text">Profile loaded. Choose focus areas and run research. Scores use the 1–5 rubric.</span>
       </div>
 
       <!-- Errors -->
@@ -292,15 +309,11 @@
 
       researchResult = data;
 
-      const samMsg = data.sam_status === 'not_configured'
-        ? ' (SAM.gov: no key)'
-        : data.sam_status === 'invalid_key'
-        ? ' (SAM.gov: invalid key)'
-        : ` (SAM.gov: ${data.sam_status})`;
+      const samMsg = data.sam_message || data.sam_status || '';
+      const notice = (data.notices || []).join(' ');
+      setStatus(`Scored ${data.scored.length} of ${data.raw_count} records on a 1–5 scale (${data.scoring_method || 'unknown'}). ${samMsg} ${notice}`.trim(), 'done');
 
-      setStatus(`Found ${data.raw_count} items, scored ${data.scored.length} opportunities.${samMsg}`, 'done');
-
-      if (data.errors.length) showError('Warnings: ' + data.errors.join('; '));
+      if ((data.errors || []).length) showError(data.errors.join('; '));
 
       renderOpportunities(data.scored);
       document.getElementById('results-card').classList.remove('hidden');
@@ -316,6 +329,12 @@
     }
   }
 
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+  }
+
   function renderOpportunities(scored) {
     const grid = document.getElementById('opp-grid');
     if (!scored.length) {
@@ -324,28 +343,30 @@
     }
 
     grid.innerHTML = scored.map(opp => {
-      const score = opp.pursuit_score || 0;
-      const scoreCls = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
+      const score = Number(opp.pursuit_score || 0);
+      const scoreCls = score >= 5 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
       const priorityCls = (opp.priority || '').toLowerCase().replace(' ', '-');
-      const value = opp.estimated_value_m ? `$${opp.estimated_value_m}M` : null;
-      const flags = (opp.flags || []).map(f => `<span class="tag tag-flag">${f}</span>`).join('');
-      const factors = (opp.key_factors || []).map(f => `<li>${f}</li>`).join('');
+      const value = (opp.amount === null || opp.amount === undefined) ? null : ('$' + Number(opp.amount).toLocaleString(undefined, {maximumFractionDigits: 0}));
+      const flagLabels = opp.flag_labels || (opp.flags || []).map(f => (typeof f === 'string' ? f : f.flag));
+      const flags = flagLabels.map(f => `<span class="tag tag-flag">${esc(f)}</span>`).join('');
+      const factors = (opp.key_factors || []).map(f => `<li>${esc(f)}</li>`).join('');
 
       return `<div class="opp-card priority-${priorityCls}">
         <div class="opp-top">
-          <div class="opp-title">${opp.title || opp.id || 'Untitled'}</div>
-          <div class="score-badge ${scoreCls}">${score}</div>
+          <div class="opp-title">${esc(opp.title || opp.id || 'Untitled')}</div>
+          <div class="score-badge ${scoreCls}">${score}/5</div>
         </div>
         <div class="opp-meta">
-          ${opp.agency_short ? `<span class="tag tag-agency">${opp.agency_short}</span>` : ''}
-          ${opp.naics ? `<span class="tag tag-naics">NAICS ${opp.naics}</span>` : ''}
-          ${opp.set_aside && opp.set_aside !== 'Full & Open' ? `<span class="tag tag-setaside">${opp.set_aside}</span>` : ''}
+          ${opp.source ? `<span class="tag tag-source">${esc(opp.source)}</span>` : ''}
+          ${(opp.agency || opp.agency_short) ? `<span class="tag tag-agency">${esc(opp.agency || opp.agency_short)}</span>` : ''}
+          ${opp.naics ? `<span class="tag tag-naics">NAICS ${esc(opp.naics)}</span>` : ''}
+          ${opp.set_aside && opp.set_aside !== 'Full & Open' ? `<span class="tag tag-setaside">${esc(opp.set_aside)}</span>` : ''}
           ${value ? `<span class="tag tag-value">${value}</span>` : ''}
-          ${opp.deadline ? `<span class="tag tag-naics">Due: ${opp.deadline}</span>` : ''}
+          ${(opp.deadline || opp.end_date) ? `<span class="tag tag-naics">${opp.deadline ? 'Due: ' + opp.deadline : 'Ends: ' + opp.end_date}</span>` : ''}
           <span class="tag tag-source">${opp.priority || 'Monitor'}</span>
           ${flags}
         </div>
-        <div class="opp-rationale">${opp.rationale || ''}</div>
+        <div class="opp-rationale">${esc(opp.rationale || '')}</div>
         ${factors ? `<ul class="opp-factors">${factors}</ul>` : ''}
       </div>`;
     }).join('');
@@ -371,6 +392,12 @@
           scored: researchResult.scored,
           focus_areas: getSelectedAreas(),
           naics_codes: researchResult.naics_codes,
+          market_context: researchResult.market_context,
+          sam_message: researchResult.sam_message,
+          usaspending_message: researchResult.usaspending_message,
+          profile_name: researchResult.profile && researchResult.profile.name,
+          example_data: researchResult.profile && researchResult.profile.example_data,
+          disclaimer: researchResult.profile && researchResult.profile.disclaimer,
         }),
       });
 
