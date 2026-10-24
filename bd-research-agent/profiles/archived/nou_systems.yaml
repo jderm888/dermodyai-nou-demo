@@ -1,0 +1,91 @@
+# Archived client profile. Not loaded by the demo.
+# The development demo uses profiles/example_contractor.yaml.
+# This file preserves the previous NOU Systems scoring context so it was not
+# deleted when that context was removed from the default path. It is not listed
+# by the API. Local use requires both:
+#   BD_PROFILE_PATH=bd-research-agent/profiles/archived/nou_systems.yaml
+#   BD_ALLOW_ARCHIVED_PROFILES=1
+# Do not set those variables for a prospect demo.
+id: nou_systems
+example_data: false
+name: NOU Systems
+disclaimer: >
+  Archived client profile preserved off the demo path. Not example data.
+headquarters: Huntsville, AL
+business_size: Small business
+set_asides:
+  - SBA
+  - 8A
+  - WOSB
+competencies:
+  - Systems Engineering & MBSE (SysML, DOORS NG, Cameo)
+  - Modeling & Simulation (LVC, HLA/DIS, AFSIM, physics-based)
+  - Cybersecurity & RMF (NIST, DISA STIG, ATO support, Zero Trust)
+  - Digital Engineering (digital twins, digital thread, MOSA)
+  - Test & Evaluation (TEMP, DT&E/OT&E support, data analysis)
+contract_size: $1M–$50M, 3–5 year PoP, prime or major sub
+agencies:
+  - Army (RDECOM/AFC/PEO)
+  - Air Force (AFLCMC, AFRL)
+  - MDA
+  - DARPA
+keywords:
+  - systems engineering
+  - modeling
+  - simulation
+  - cybersecurity
+  - digital engineering
+  - test
+naics_codes:
+  - "541330"
+  - "541990"
+  - "541611"
+  - "541512"
+  - "541519"
+  - "541715"
+  - "541513"
+  - "541380"
+  - "334511"
+focus_areas:
+  systems_engineering:
+    label: Systems Engineering
+    codes:
+      - "541330"
+      - "541990"
+      - "541611"
+    description: Engineering services, technical consulting, management consulting
+  modeling_simulation:
+    label: Modeling & Simulation
+    codes:
+      - "541512"
+      - "541519"
+      - "541715"
+    description: Computer systems design, R&D in engineering sciences
+  cybersecurity:
+    label: Cybersecurity
+    codes:
+      - "541512"
+      - "541513"
+      - "541519"
+    description: Computer systems design, network/data security services
+  digital_engineering:
+    label: Digital Engineering
+    codes:
+      - "541512"
+      - "541330"
+      - "541715"
+    description: MBSE, digital twin, model-based definition
+  test_evaluation:
+    label: Test & Evaluation
+    codes:
+      - "541380"
+      - "541990"
+      - "334511"
+    description: Testing laboratories, navigation/guidance instruments
+past_performance: []
+notes: >
+  Original scoring context described a Huntsville, AL small defense contractor
+  eligible for SBA, 8(a), and WOSB set-asides, with a strong Redstone Arsenal
+  presence. Typical contracts were $1M–$50M with a 3–5 year period of performance,
+  as a prime or major sub. Target agencies were Army (RDECOM/AFC/PEO), Air Force
+  (AFLCMC, AFRL), MDA, and DARPA.

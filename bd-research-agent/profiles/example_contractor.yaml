@@ -1,0 +1,48 @@
+# FICTIONAL sample profile for demos. Northwind Range Systems is not a real company.
+# Copy this file, replace the fields, and point BD_PROFILE_PATH at your copy.
+id: example_contractor
+example_data: true
+name: Northwind Range Systems (EXAMPLE)
+disclaimer: >
+  FICTIONAL contractor created for demonstrations. Northwind Range Systems is
+  not a real company. Past-performance entries in this profile are made-up
+  examples and are not SAM.gov or USASpending records.
+headquarters: Colorado Springs, CO
+business_size: Small business
+set_asides:
+  - Small Business
+competencies:
+  - Range instrumentation software
+  - Test-data analytics
+  - Training-system support
+contract_size: $500K–$20M
+agencies:
+  - Department of Defense
+  - Department of the Air Force
+keywords:
+  - range instrumentation
+  - telemetry
+  - test data
+  - training systems
+naics_codes:
+  - "541511"
+  - "541512"
+  - "541715"
+focus_areas:
+  range_software:
+    label: Range Software
+    codes:
+      - "541511"
+      - "541512"
+    description: Custom software for test ranges and instrumentation
+  test_data:
+    label: Test Data Analytics
+    codes:
+      - "541715"
+      - "541512"
+    description: Analysis of test and evaluation data
+past_performance:
+  - name: EXAMPLE — Western Range telemetry dashboard
+    customer: Fictional Test Wing
+    period: "2022-2024"
+    summary: Made-up past performance used only to illustrate scoring inputs.
