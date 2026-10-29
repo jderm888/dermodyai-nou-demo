@@ -16,7 +16,7 @@ import anthropic
 
 from capabilities import get_capabilities_for_matching
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-5-5"
 
 _client = anthropic.Anthropic()
 _async_client = anthropic.AsyncAnthropic()
