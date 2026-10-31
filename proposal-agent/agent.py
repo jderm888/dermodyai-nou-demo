@@ -134,7 +134,7 @@ def match_capabilities(requirements: dict) -> dict:
 
     response = _client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        max_tokens=16384,
         system=MATCH_SYSTEM,
         messages=[
             {
@@ -146,6 +146,8 @@ def match_capabilities(requirements: dict) -> dict:
             }
         ],
     )
+    if response.stop_reason == "max_tokens":
+        raise ValueError("Capability matching hit its output limit; analysis is incomplete.")
     raw = "".join(b.text for b in response.content if b.type == "text").strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
