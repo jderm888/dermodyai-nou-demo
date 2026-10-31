@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NOU Systems — Proposal Assistant</title>
+  <title>{{ company.name }} — Proposal Assistant</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -334,10 +334,11 @@
 
 <header>
   <div>
-    <div class="logo">NOU Systems — Proposal Assistant</div>
+    <div class="logo">{{ company.name }} — Proposal Assistant</div>
     <div class="subtitle">AI-powered RFP analysis &amp; proposal drafting</div>
+    <div class="subtitle" style="font-size:11px; opacity:0.7;">{{ company.disclaimer }}</div>
   </div>
-  <div class="badge">Demo</div>
+  <div class="badge" title="{{ company.disclaimer }}">Demo</div>
 </header>
 
 <div class="container">
@@ -378,6 +379,7 @@ Example: 'The Government requires contractor support for systems engineering and
         <div class="spinner" id="analyze-spinner"></div>
         Analyze RFP
       </button>
+      <button class="btn" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d;" onclick="loadSampleRfp()">Load Sample RFP</button>
       <span id="analyze-status" style="font-size:13px; color:#8b949e;"></span>
     </div>
     <div class="error-box" id="analyze-error"></div>
@@ -446,6 +448,16 @@ Example: 'The Government requires contractor support for systems engineering and
   let currentTab = 'text';
   let selectedFile = null;
   let analysisResult = null;
+
+  async function loadSampleRfp() {
+    const res = await fetch('/api/sample-rfp');
+    if (!res.ok) return;
+    currentTab = 'text';
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+    document.getElementById('tab-text').classList.remove('hidden');
+    document.getElementById('tab-file').classList.add('hidden');
+    document.getElementById('rfp-text').value = await res.text();
+  }
 
   function switchTab(tab) {
     currentTab = tab;

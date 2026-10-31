@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
@@ -26,7 +26,15 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html", {"company": agent.COMPANY})
+
+
+@app.get("/api/sample-rfp", response_class=PlainTextResponse)
+async def sample_rfp():
+    """Fictional sample RFP for demos."""
+    path = os.path.join(os.path.dirname(__file__), "samples", "sample_rfp.txt")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
 
 
 @app.post("/api/analyze")

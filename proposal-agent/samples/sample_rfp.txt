@@ -1,0 +1,64 @@
+*** FICTIONAL SAMPLE RFP — CREATED FOR DEMONSTRATION PURPOSES ONLY ***
+
+REQUEST FOR PROPOSAL
+Solicitation Number: W31P4Q-27-R-DEMO
+Issuing Office: U.S. Army Contracting Command – Redstone Arsenal, AL
+On behalf of: Program Executive Office Missiles and Space (PEO MS), Lower Tier Project Office
+Program: Integrated Air and Missile Defense (IAMD) Interceptor Production Ramp & Digital Sustainment (IPR-DS)
+NAICS Code: 336414 – Guided Missile and Space Vehicle Manufacturing
+Set-Aside: None – Full and Open Competition
+Contract Type: Hybrid Firm-Fixed-Price (production) / Cost-Plus-Incentive-Fee (engineering & sustainment)
+Period of Performance: One (1) 12-month base period plus four (4) 12-month option periods
+
+1. BACKGROUND
+Demand for hit-to-kill interceptors has grown sharply due to operational expenditures and
+allied Foreign Military Sales. The Government seeks a contractor to increase interceptor
+production capacity, modernize the production and sustainment enterprise using digital
+engineering, and improve fleet readiness for fielded Patriot-class interceptor inventories.
+
+2. SCOPE OF WORK
+2.1 Production Ramp
+  a. Increase interceptor production from current rates to at least 650 units per year by the
+     end of Option Period 2.
+  b. Qualify second sources for long-lead components, including seekers, rocket motors, and
+     energetics, and deliver a Supply Chain Resilience Plan.
+  c. Maintain First Article Test and Lot Acceptance Test compliance throughout the ramp.
+2.2 Digital Engineering & MOSA
+  a. Establish an authoritative digital thread linking design, production, test, and sustainment data.
+  b. Deliver a digital twin of the interceptor production line to model throughput and bottlenecks.
+  c. Apply a Modular Open Systems Approach (MOSA) to seeker and guidance electronics to enable
+     future technology insertion.
+2.3 Sustainment & Readiness
+  a. Provide performance-based logistics for fielded interceptors, with a readiness target of 90%.
+  b. Implement predictive maintenance and stockpile reliability analytics.
+  c. Support recertification of aging inventory.
+2.4 Cybersecurity
+  a. Achieve and maintain CMMC Level 2 across the prime and critical suppliers.
+  b. Support Risk Management Framework (RMF) activities for production test equipment and
+     connected factory systems.
+2.5 Test & Evaluation
+  a. Support developmental and operational flight tests, including test planning, range
+     coordination, and post-test data analysis.
+
+3. DELIVERABLES
+  - Production Ramp Plan (30 days after award)
+  - Supply Chain Resilience Plan (60 days after award)
+  - Digital Thread Architecture Document and Production Digital Twin (180 days after award)
+  - MOSA Interface Control Documents
+  - Monthly Program Management Reviews and Contract Performance Reports (EVM)
+  - Readiness and Reliability Reports (quarterly)
+  - Cybersecurity / CMMC Compliance Reports (semi-annual)
+  - Flight Test Reports
+
+4. EVALUATION CRITERIA (Best Value Tradeoff)
+  Factor 1 – Technical Approach (Production Ramp & Digital Engineering) – most important
+  Factor 2 – Management Approach & Supply Chain Risk
+  Factor 3 – Past Performance (relevant interceptor or missile production programs)
+  Factor 4 – Small Business Participation Plan (target: 25% of subcontract dollars)
+  Factor 5 – Cost/Price
+  Factors 1 through 4, combined, are significantly more important than cost/price.
+
+5. SUBMISSION
+  Proposals are due 45 days after release. Volume page limits: Technical 50, Management 30,
+  Past Performance 15. Questions must be submitted through the Procurement Integrated
+  Enterprise Environment (PIEE) within 15 days of release.
