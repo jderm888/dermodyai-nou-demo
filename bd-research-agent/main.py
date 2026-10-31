@@ -96,12 +96,23 @@ async def research(req: ResearchRequest):
             all_items.extend(opps)
             sam_status = f"ok ({len(opps)} opportunities)"
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 403:
+            code = e.response.status_code
+            detail = e.response.text[:200]
+            if code in (401, 403):
                 sam_status = "invalid_key"
-                errors.append("SAM.gov: Invalid or expired API key.")
+                errors.append(
+                    "SAM.gov: API key rejected. New keys can take up to a day to activate; "
+                    f"also check it was copied fully. ({detail})"
+                )
+            elif code == 429:
+                sam_status = "rate_limited"
+                errors.append(
+                    "SAM.gov: daily request limit reached for this key "
+                    "(public keys are limited to a few requests per day). Try again tomorrow."
+                )
             else:
                 sam_status = "error"
-                errors.append(f"SAM.gov HTTP {e.response.status_code}")
+                errors.append(f"SAM.gov HTTP {code}: {detail}")
         except Exception as e:
             sam_status = "error"
             errors.append(f"SAM.gov error: {e}")
