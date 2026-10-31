@@ -32,7 +32,7 @@
 
     .form-row { display: flex; flex-direction: column; gap: 6px; }
     .form-row label { font-size: 12px; color: #8b949e; font-weight: 500; }
-    input[type="text"], input[type="number"], select {
+    input[type="password"], input[type="text"], input[type="number"], select {
       width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
       padding: 8px 10px; color: #e6edf3; font-size: 13px; transition: border-color 0.15s;
     }
@@ -141,6 +141,10 @@
 
       <div class="card">
         <h2>Filters</h2>
+        <div class="form-row" style="margin-bottom:12px">
+          <label for="analysis-mode">Report mode</label>
+          <select id="analysis-mode"><option value="source">Source report (no AI credits)</option><option value="claude">Claude analysis (requires API credits)</option></select>
+        </div>
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div class="form-row">
             <label>Days Back</label>
@@ -166,9 +170,9 @@
       <div class="card">
         <h2>SAM.gov API Key</h2>
         <div class="form-row">
-          <input type="text" id="sam-key" placeholder="Optional — paste key here" />
+          <input type="password" id="sam-key" autocomplete="off" placeholder="Optional — paste key here" />
         </div>
-        <div class="key-hint">Free key at <strong>sam.gov/profile</strong> → API Keys<br>Without a key, only USASpending.gov data is used.</div>
+        <div class="key-hint">Key: SAM.gov → Account Details → Public API Keys<br>Without a key, only USASpending.gov data is used.</div>
       </div>
 
       <button class="btn btn-primary" id="research-btn" onclick="runResearch()">
@@ -262,6 +266,9 @@
     const btn = document.getElementById('research-btn');
     const briefBtn = document.getElementById('brief-btn');
     clearError();
+    researchResult = null;
+    document.getElementById('results-card').classList.add('hidden');
+    document.getElementById('brief-card').classList.add('hidden');
     btn.classList.add('loading');
     btn.disabled = true;
     briefBtn.disabled = true;
@@ -275,6 +282,7 @@
     }
 
     const body = {
+      analysis_mode: document.getElementById("analysis-mode").value,
       focus_areas: areas,
       days_back: parseInt(document.getElementById('days-back').value) || 180,
       limit: parseInt(document.getElementById('result-limit').value) || 25,
@@ -299,10 +307,12 @@
         ? ' (SAM.gov: invalid key)'
         : ` (SAM.gov: ${data.sam_status})`;
 
-      setStatus(`Found ${data.raw_count} items, scored ${data.scored.length} opportunities.${samMsg}`, 'done');
+      setStatus(`Found ${data.raw_count} items; ${data.scored.length} ${data.analysis_mode === "source" ? "source records (no AI scoring)" : "scored records"}.${samMsg}`, 'done');
 
       if (data.errors.length) showError('Warnings: ' + data.errors.join('; '));
 
+      document.querySelector('.results-header h3').textContent = data.analysis_mode === 'source' ? 'Source Records — Unscored' : 'Scored Opportunities';
+      briefBtn.lastChild.textContent = data.analysis_mode === 'source' ? 'Generate Source Report (no AI credits)' : 'Generate BD Intelligence Brief';
       renderOpportunities(data.scored);
       document.getElementById('results-card').classList.remove('hidden');
       document.getElementById('count-badge').textContent = `${data.scored.length} results`;
@@ -324,7 +334,8 @@
       return;
     }
 
-    grid.innerHTML = scored.map(opp => {
+    grid.innerHTML = scored.map(record => {
+      const opp = Object.fromEntries(Object.entries(record).map(([k,v]) => [k, typeof v === 'string' ? escapeHtml(v) : Array.isArray(v) ? v.map(escapeHtml) : v]));
       const score = opp.pursuit_score || 0;
       const scoreCls = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
       const priorityCls = (opp.priority || '').toLowerCase().replace(' ', '-');
@@ -336,7 +347,7 @@
       return `<div class="opp-card priority-${priorityCls}">
         <div class="opp-top">
           <div class="opp-title">${opp.title || opp.id || 'Untitled'}</div>
-          <div class="score-badge ${scoreCls}">${score}</div>
+          <div class="score-badge ${scoreCls}">${opp.pursuit_score == null ? "—" : score}</div>
         </div>
         <div class="opp-meta">
           ${opp.agency_short ? `<span class="tag tag-agency">${opp.agency_short}</span>` : ''}
@@ -359,7 +370,8 @@
     const briefArea = document.getElementById('brief-area');
     clearError();
     btn.classList.add('loading'); btn.disabled = true;
-    setStatus('Generating BD Intelligence Brief…', 'active');
+    setStatus(researchResult.analysis_mode === 'source' ? 'Building source report…' : 'Generating BD Intelligence Brief…', 'active');
+    document.querySelector('.brief-header h2').textContent = researchResult.analysis_mode === 'source' ? 'Source Report — No AI Analysis' : 'BD Intelligence Brief';
 
     document.getElementById('brief-card').classList.remove('hidden');
     briefArea.innerHTML = '<span class="brief-cursor"></span>';
@@ -370,12 +382,15 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          analysis_mode: researchResult.analysis_mode,
+          errors: researchResult.errors,
           scored: researchResult.scored,
           focus_areas: getSelectedAreas(),
           naics_codes: researchResult.naics_codes,
         }),
       });
 
+      if (!res.ok) throw new Error('Report request failed.');
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -398,10 +413,10 @@
               briefArea.innerHTML = renderMarkdown(fullText) + '<span class="brief-cursor"></span>';
               briefArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
-          } catch (_) {}
+          } catch (error) { if (!(error instanceof SyntaxError)) throw error; }
         }
       }
-      setStatus('Brief complete.', 'done');
+      setStatus(researchResult.analysis_mode === 'source' ? 'Source report complete — no AI credits used.' : 'Brief complete.', 'done');
       briefArea.querySelector('.brief-cursor')?.remove();
     } catch (e) {
       showError(e.message);
@@ -411,8 +426,12 @@
     }
   }
 
+  function escapeHtml(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function renderMarkdown(text) {
-    return text
+    return escapeHtml(text)
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')

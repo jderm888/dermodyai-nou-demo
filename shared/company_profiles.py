@@ -218,6 +218,10 @@ If an award's recipient is Lockheed Martin, treat it as an incumbent position to
             "description": "Aircraft support services, simulators, logistics engineering",
         },
     },
+    # SAM.gov public keys have a very low daily request limit, and SAM's API
+    # only accepts one NAICS per request. Cap SAM lookups to these high-signal
+    # codes (engineering services, mission-systems software, navigation/guidance).
+    "sam_naics": ["541330", "541512", "334511"],
 }
 
 
