@@ -14,9 +14,9 @@ load_dotenv()
 
 import anthropic
 
-from capabilities import get_capabilities_for_matching
+from capabilities import COMPANY, get_capabilities_for_matching
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-5-5"
 
 _client = anthropic.Anthropic()
 _async_client = anthropic.AsyncAnthropic()
@@ -70,8 +70,8 @@ def extract_requirements(rfp_text: str) -> dict:
 # Step 2: Match capabilities
 # ---------------------------------------------------------------------------
 
-MATCH_SYSTEM = """You are a business development expert for NOU Systems, a defense contractor
-based in Huntsville, AL. Your role is to identify which company capabilities best respond
+MATCH_SYSTEM = f"""You are a business development expert for {COMPANY['name']}, a defense contractor
+based in {COMPANY['location']}. Your role is to identify which company capabilities best respond
 to an RFP and how to position them. Always respond with valid JSON only."""
 
 MATCH_USER = """Given the RFP requirements below and our company capabilities, identify the
@@ -130,8 +130,8 @@ def match_capabilities(requirements: dict) -> dict:
 # Step 3: Stream draft proposal sections
 # ---------------------------------------------------------------------------
 
-DRAFT_SYSTEM = """You are a senior proposal writer for NOU Systems, a defense contractor
-in Huntsville, AL. You write compelling, technically precise, and compliant proposal sections
+DRAFT_SYSTEM = f"""You are a senior proposal writer for {COMPANY['name']}, a defense contractor
+in {COMPANY['location']}. You write compelling, technically precise, and compliant proposal sections
 for U.S. government contracts. Your writing is specific, active-voice, and avoids boilerplate.
 Reference the company's actual capabilities and tailor every section to the specific RFP."""
 
@@ -173,13 +173,11 @@ compliance with government QA requirements; reference ISO 9001 or CMMI if applic
 (2-3 relevant program examples — use [PLACEHOLDER] for actual contract numbers, but describe
 the type of work, scope, and measurable outcomes realistically)
 
-## Why NOU Systems
-(1-2 paragraphs: our unique value proposition for this specific opportunity — small business
-agility, deep Huntsville/Redstone Arsenal presence, relevant certifications, and commitment
-to mission success)
+## Why {company_name}
+(1-2 paragraphs: our unique value proposition for this specific opportunity — {why_us})
 
 ## Footer
-(One-line document control: Company — NOU Systems | Program — {program_name} |
+(One-line document control: Company — {company_name} | Program — {program_name} |
 Solicitation — [SOLICITATION NUMBER] | Prepared: [DATE] |
 PROPRIETARY — For Government Use Only)
 """
@@ -217,6 +215,8 @@ async def stream_draft(
         agency=agency,
         requirements_json=json.dumps(req_slim, indent=2),
         matched_json=json.dumps(matched_slim, indent=2),
+        company_name=COMPANY["name"],
+        why_us=COMPANY["why_us_guidance"],
     )
 
     async with _async_client.messages.stream(

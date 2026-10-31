@@ -1,34 +1,14 @@
 """
-NAICS code profiles relevant to NOU Systems' core competencies.
+NAICS code profiles for the active company profile (see shared/company_profiles.py).
 """
 
-NAICS_PROFILES = {
-    "systems_engineering": {
-        "label": "Systems Engineering",
-        "codes": ["541330", "541990", "541611"],
-        "description": "Engineering services, technical consulting, management consulting",
-    },
-    "modeling_simulation": {
-        "label": "Modeling & Simulation",
-        "codes": ["541512", "541519", "541715"],
-        "description": "Computer systems design, R&D in engineering sciences",
-    },
-    "cybersecurity": {
-        "label": "Cybersecurity",
-        "codes": ["541512", "541513", "541519"],
-        "description": "Computer systems design, network/data security services",
-    },
-    "digital_engineering": {
-        "label": "Digital Engineering",
-        "codes": ["541512", "541330", "541715"],
-        "description": "MBSE, digital twin, model-based definition",
-    },
-    "test_evaluation": {
-        "label": "Test & Evaluation",
-        "codes": ["541380", "541990", "334511"],
-        "description": "Testing laboratories, navigation/guidance instruments",
-    },
-}
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
+from company_profiles import COMPANY  # noqa: E402
+
+NAICS_PROFILES = COMPANY["naics_profiles"]
 
 # Flattened deduplicated list of all NAICS codes
 ALL_NAICS_CODES: list[str] = sorted(

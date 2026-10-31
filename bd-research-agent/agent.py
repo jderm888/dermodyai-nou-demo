@@ -18,27 +18,14 @@ load_dotenv()
 
 import anthropic
 
-from naics_config import NAICS_PROFILES
+from naics_config import COMPANY, NAICS_PROFILES
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-5-5"
 
 _client = anthropic.Anthropic()
 _async_client = anthropic.AsyncAnthropic()
 
-COMPANY_CONTEXT = """
-NOU Systems is a small defense contractor headquartered in Huntsville, AL.
-Core competencies:
-- Systems Engineering & MBSE (SysML, DOORS NG, Cameo)
-- Modeling & Simulation (LVC, HLA/DIS, AFSIM, physics-based)
-- Cybersecurity & RMF (NIST, DISA STIG, ATO support, Zero Trust)
-- Digital Engineering (digital twins, digital thread, MOSA)
-- Test & Evaluation (TEMP, DT&E/OT&E support, data analysis)
-
-Typical contracts: $1M–$50M, 3–5 year PoP, prime or major sub
-Target agencies: Army (RDECOM/AFC/PEO), Air Force (AFLCMC, AFRL), MDA, DARPA
-Strong Huntsville presence; can support Redstone Arsenal programs
-Small business — eligible for SBA, 8(a), WOSB set-asides
-"""
+COMPANY_CONTEXT = COMPANY["bd_context"]
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +36,7 @@ SCORE_SYSTEM = """You are a BD analyst for a defense contractor. Your job is to
 evaluate contract opportunities and awards for strategic fit. Be concise and realistic.
 Respond with valid JSON only — no markdown fences."""
 
-SCORE_USER = """Evaluate these contract opportunities/awards for NOU Systems.
+SCORE_USER = """Evaluate these contract opportunities/awards for {company_name}.
 
 COMPANY PROFILE:
 {company}
@@ -70,14 +57,14 @@ For each item, return a JSON array where each element has:
   "agency_short": "short agency name",
   "naics": "NAICS code",
   "set_aside": "set-aside type or 'Full & Open'",
-  "flags": ["list of notable flags: e.g. 'Recompete', 'Incumbent Risk', 'Expiring Soon', 'AL location', 'Small Biz Only']"
+  "flags": ["list of notable flags: e.g. 'Recompete', 'Incumbent Risk', 'Expiring Soon', 'AL location', 'Small Biz Only', 'Incumbent: Us', 'Teaming Opportunity']"
 }}
 
 Return ONLY the JSON array, nothing else."""
 
 
 def score_opportunities(opportunities: list[dict]) -> list[dict]:
-    """Score a list of opportunities/awards for NOU Systems fit."""
+    """Score a list of opportunities/awards for the active company's fit."""
     if not opportunities:
         return []
 
@@ -93,7 +80,7 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
             messages=[
                 {
                     "role": "user",
-                    "content": SCORE_USER.format(company=COMPANY_CONTEXT, data=data_str),
+                    "content": SCORE_USER.format(company_name=COMPANY["name"], company=COMPANY_CONTEXT, data=data_str),
                 }
             ],
         )
@@ -117,10 +104,10 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
 # Step 2: Stream BD Intelligence Brief
 # ---------------------------------------------------------------------------
 
-BRIEF_SYSTEM = """You are a senior BD strategist for a defense contractor in Huntsville, AL.
+BRIEF_SYSTEM = f"""You are a senior BD strategist for {COMPANY['name']}, a defense contractor in {COMPANY['location']}.
 Write sharp, actionable intelligence briefs. Be specific. Avoid filler."""
 
-BRIEF_USER = """Write a BD Intelligence Brief for NOU Systems based on this market data.
+BRIEF_USER = """Write a BD Intelligence Brief for {company_name} based on this market data.
 
 COMPANY PROFILE:
 {company}
@@ -141,14 +128,14 @@ Write the following sections in Markdown:
 
 ## Top Pursuit Opportunities
 (For each High/Medium priority item: 1 paragraph with the opportunity name bolded,
-why it fits NOU, key risks, recommended next action)
+why it fits {company_name}, key risks, recommended next action)
 
 ## Market Landscape
 (What the award data tells us about spending trends, dominant primes/incumbents,
-and where NOU can win)
+and where {company_name} can win)
 
 ## Recommended BD Actions
-(Numbered list of 5-7 specific, actionable steps NOU should take in the next 30-60 days)
+(Numbered list of 5-7 specific, actionable steps {company_name} should take in the next 30-60 days)
 
 ## Watch List
 (Brief notes on Monitor-priority items worth tracking)
@@ -172,6 +159,7 @@ async def stream_brief(
             {
                 "role": "user",
                 "content": BRIEF_USER.format(
+                    company_name=COMPANY["name"],
                     company=COMPANY_CONTEXT,
                     focus_areas=areas_str,
                     scored_json=json.dumps(top, indent=2, default=str),
