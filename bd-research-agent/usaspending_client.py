@@ -48,6 +48,7 @@ def fetch_recent_awards(
             "End Date",
             "Awarding Agency",
             "Awarding Sub Agency",
+            "NAICS",
             "NAICS Code",
             "NAICS Description",
             "Award Type",
@@ -67,29 +68,41 @@ def fetch_recent_awards(
 
 def fetch_agency_spending_by_naics(naics_codes: list[str], limit: int = 10) -> dict:
     """
-    Fetch aggregate spending by sub-agency for given NAICS codes (last 2 fiscal years).
+    Fetch aggregate spending by sub-agency for given NAICS codes (last 2 years).
     Useful for market sizing.
     """
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=730)
     payload = {
         "filters": {
             "award_type_codes": ["A", "B", "C", "D"],
             "naics_codes": naics_codes,
+            "time_period": [
+                {
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d"),
+                }
+            ],
             "agencies": [
                 {"type": "awarding", "tier": "toptier", "name": "Department of Defense"}
             ],
         },
-        "category": "awarding_subagency",
-        "subaward": False,
         "page": 1,
         "limit": limit,
-        "order": "desc",
-        "sort": "aggregated_amount",
     }
 
     with httpx.Client(timeout=TIMEOUT) as client:
-        resp = client.post(f"{BASE_URL}/search/spending_by_category/", json=payload)
+        resp = client.post(f"{BASE_URL}/search/spending_by_category/awarding_subagency/", json=payload)
         resp.raise_for_status()
         return resp.json()
+
+
+def _naics_field(r: dict, key: str, legacy_field: str) -> str:
+    """USASpending returns NAICS as an object under "NAICS"; older responses used flat fields."""
+    naics = r.get("NAICS")
+    if isinstance(naics, dict) and naics.get(key):
+        return naics[key]
+    return r.get(legacy_field) or ""
 
 
 def normalize_awards(raw: dict) -> list[dict]:
@@ -109,8 +122,8 @@ def normalize_awards(raw: dict) -> list[dict]:
                 "end_date": r.get("End Date", ""),
                 "agency": r.get("Awarding Agency", ""),
                 "sub_agency": r.get("Awarding Sub Agency", ""),
-                "naics_code": r.get("NAICS Code", ""),
-                "naics_description": r.get("NAICS Description", ""),
+                "naics_code": _naics_field(r, "code", "NAICS Code"),
+                "naics_description": _naics_field(r, "description", "NAICS Description"),
                 "award_type": r.get("Award Type", ""),
                 "state": r.get("Place of Performance State Code", ""),
             }

@@ -11,6 +11,7 @@ import json
 import re
 import sys
 import traceback
+from datetime import date
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
@@ -38,6 +39,11 @@ Respond with valid JSON only — no markdown fences."""
 
 SCORE_USER = """Evaluate these contract opportunities/awards for {company_name}.
 
+TODAY'S DATE: {today}
+For awards, "amount" is total obligated over the life of the award and end_date is the
+period-of-performance end, not a proposal due date. Only flag "Expiring Soon" if the end
+date is after today and within 12 months; if it is already past, flag "Ended".
+
 COMPANY PROFILE:
 {company}
 
@@ -53,7 +59,8 @@ For each item, return a JSON array where each element has:
   "rationale": "1-2 sentences on fit",
   "key_factors": ["2-3 bullet factors"],
   "estimated_value_m": estimated value in $M as a number or null,
-  "deadline": "response deadline or end date, or null",
+  "deadline": "YYYY-MM-DD response deadline (solicitations) or period-of-performance end (awards), or null",
+  "date_type": "Due" for a solicitation response deadline, "Ends" for an award end date,
   "agency_short": "short agency name",
   "naics": "NAICS code",
   "set_aside": "set-aside type or 'Full & Open'",
@@ -80,7 +87,12 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
             messages=[
                 {
                     "role": "user",
-                    "content": SCORE_USER.format(company_name=COMPANY["name"], company=COMPANY_CONTEXT, data=data_str),
+                    "content": SCORE_USER.format(
+                        company_name=COMPANY["name"],
+                        company=COMPANY_CONTEXT,
+                        data=data_str,
+                        today=date.today().isoformat(),
+                    ),
                 }
             ],
         )
@@ -108,6 +120,7 @@ BRIEF_SYSTEM = f"""You are a senior BD strategist for {COMPANY['name']}, a defen
 Write sharp, actionable intelligence briefs. Be specific. Avoid filler."""
 
 BRIEF_USER = """Write a BD Intelligence Brief for {company_name} based on this market data.
+TODAY'S DATE: {today}
 
 COMPANY PROFILE:
 {company}
@@ -161,6 +174,7 @@ async def stream_brief(
                 "content": BRIEF_USER.format(
                     company_name=COMPANY["name"],
                     company=COMPANY_CONTEXT,
+                    today=date.today().isoformat(),
                     focus_areas=areas_str,
                     scored_json=json.dumps(top, indent=2, default=str),
                     market_context=market_context,

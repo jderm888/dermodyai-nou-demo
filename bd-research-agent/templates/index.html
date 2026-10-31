@@ -328,7 +328,8 @@
       const score = opp.pursuit_score || 0;
       const scoreCls = score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low';
       const priorityCls = (opp.priority || '').toLowerCase().replace(' ', '-');
-      const value = opp.estimated_value_m ? `$${opp.estimated_value_m}M` : null;
+      const m = Number(opp.estimated_value_m);
+      const value = m ? (m >= 1000 ? `$${(m / 1000).toFixed(1)}B` : `$${Math.round(m)}M`) : null;
       const flags = (opp.flags || []).map(f => `<span class="tag tag-flag">${f}</span>`).join('');
       const factors = (opp.key_factors || []).map(f => `<li>${f}</li>`).join('');
 
@@ -342,7 +343,7 @@
           ${opp.naics ? `<span class="tag tag-naics">NAICS ${opp.naics}</span>` : ''}
           ${opp.set_aside && opp.set_aside !== 'Full & Open' ? `<span class="tag tag-setaside">${opp.set_aside}</span>` : ''}
           ${value ? `<span class="tag tag-value">${value}</span>` : ''}
-          ${opp.deadline ? `<span class="tag tag-naics">Due: ${opp.deadline}</span>` : ''}
+          ${opp.deadline ? `<span class="tag tag-naics">${opp.date_type || 'Date'}: ${opp.deadline}</span>` : ''}
           <span class="tag tag-source">${opp.priority || 'Monitor'}</span>
           ${flags}
         </div>
