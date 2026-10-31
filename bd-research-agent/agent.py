@@ -82,7 +82,7 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
     try:
         response = _client.messages.create(
             model=MODEL,
-            max_tokens=8192,
+            max_tokens=16384,
             system=SCORE_SYSTEM,
             messages=[
                 {
@@ -100,16 +100,35 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
         print("ERROR in score_opportunities — Claude API call failed:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return [{"api_error": "Claude API call failed — see server stderr for details"}]
-    raw = response.content[0].text.strip()
+    raw = "".join(b.text for b in response.content if b.type == "text").strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     try:
         scored = json.loads(raw)
-        if isinstance(scored, list):
-            return sorted(scored, key=lambda x: x.get("pursuit_score", 0), reverse=True)
-        return scored
     except json.JSONDecodeError:
-        return [{"parse_error": raw[:300]}]
+        # Model output was likely truncated mid-array; salvage complete objects.
+        scored = _salvage_json_array(raw)
+        if not scored:
+            return [{"parse_error": raw[:300]}]
+    if isinstance(scored, list):
+        return sorted(scored, key=lambda x: x.get("pursuit_score", 0), reverse=True)
+    return scored
+
+
+def _salvage_json_array(raw: str) -> list[dict]:
+    """Recover the leading complete objects from a truncated JSON array."""
+    if not raw.lstrip().startswith("["):
+        return []
+    # Trim back to the last complete object (last '}') and close the array.
+    last = raw.rfind("}")
+    if last == -1:
+        return []
+    candidate = raw[: last + 1] + "]"
+    try:
+        parsed = json.loads(candidate)
+        return parsed if isinstance(parsed, list) else []
+    except json.JSONDecodeError:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +213,6 @@ def build_market_context(agency_spending: dict) -> str:
     lines = ["Top DoD sub-agencies by contract spend (selected NAICS):"]
     for r in results[:10]:
         name = r.get("name", "Unknown")
-        amount = r.get("aggregated_amount", 0)
+        amount = r.get("amount", 0)
         lines.append(f"  - {name}: ${amount:,.0f}")
     return "\n".join(lines)

@@ -15,6 +15,10 @@ ALL_NAICS_CODES: list[str] = sorted(
     set(code for p in NAICS_PROFILES.values() for code in p["codes"])
 )
 
+# Capped NAICS list for SAM.gov lookups (SAM has a low daily request limit and
+# only accepts one NAICS per request). Falls back to the first 3 known codes.
+SAM_NAICS_CODES: list[str] = COMPANY.get("sam_naics") or ALL_NAICS_CODES[:3]
+
 # DoD agency toptier codes (USASpending.gov)
 DOD_AGENCIES = [
     {"type": "awarding", "tier": "toptier", "name": "Department of Defense"},

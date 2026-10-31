@@ -19,7 +19,7 @@ from pydantic import BaseModel
 import agent
 import usaspending_client as usa
 import sam_client as sam
-from naics_config import NAICS_PROFILES, ALL_NAICS_CODES
+from naics_config import NAICS_PROFILES, ALL_NAICS_CODES, SAM_NAICS_CODES
 
 app = FastAPI(title="BD Research Agent", version="0.1.0")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
@@ -85,9 +85,13 @@ async def research(req: ResearchRequest):
     # --- SAM.gov (if key provided) ---
     sam_status = "not_configured"
     if req.sam_api_key and req.sam_api_key.strip():
+        # Cap SAM lookups to the high-signal codes (SAM has a low daily request
+        # limit and only accepts one NAICS per request). Respect the selected
+        # focus areas where they overlap, else fall back to the capped list.
+        sam_codes = [c for c in SAM_NAICS_CODES if c in selected_codes] or SAM_NAICS_CODES
         try:
             raw_opps = sam.fetch_opportunities(
-                naics_codes=selected_codes,
+                naics_codes=sam_codes,
                 api_key=req.sam_api_key.strip(),
                 limit=req.limit,
                 set_aside_codes=req.set_aside_filter,

@@ -56,7 +56,7 @@ def extract_requirements(rfp_text: str) -> dict:
         system=EXTRACT_SYSTEM,
         messages=[{"role": "user", "content": EXTRACT_USER.format(rfp_text=rfp_text)}],
     )
-    raw = response.content[0].text.strip()
+    raw = "".join(b.text for b in response.content if b.type == "text").strip()
     # Strip markdown fences if the model adds them anyway
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
@@ -117,7 +117,7 @@ def match_capabilities(requirements: dict) -> dict:
             }
         ],
     )
-    raw = response.content[0].text.strip()
+    raw = "".join(b.text for b in response.content if b.type == "text").strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     try:
