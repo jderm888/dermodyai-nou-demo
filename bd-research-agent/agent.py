@@ -23,8 +23,7 @@ from naics_config import COMPANY, NAICS_PROFILES
 
 MODEL = "claude-sonnet-5-5"
 
-_client = anthropic.Anthropic()
-_async_client = anthropic.AsyncAnthropic()
+
 
 COMPANY_CONTEXT = COMPANY["bd_context"]
 
@@ -80,7 +79,7 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
     data_str = json.dumps(sample, indent=2, default=str)
 
     try:
-        response = _client.messages.create(
+        response = anthropic.Anthropic().messages.create(
             model=MODEL,
             max_tokens=16384,
             system=SCORE_SYSTEM,
@@ -99,7 +98,7 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
     except Exception:
         print("ERROR in score_opportunities — Claude API call failed:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        return [{"api_error": "Claude API call failed — see server stderr for details"}]
+        raise RuntimeError("Claude analysis unavailable. Check API billing or choose Source report (no AI credits).") from None
     raw = "".join(b.text for b in response.content if b.type == "text").strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
@@ -109,26 +108,33 @@ def score_opportunities(opportunities: list[dict]) -> list[dict]:
         # Model output was likely truncated mid-array; salvage complete objects.
         scored = _salvage_json_array(raw)
         if not scored:
-            return [{"parse_error": raw[:300]}]
-    if isinstance(scored, list):
+            raise RuntimeError("Claude returned incomplete scoring JSON. Retry or use Source report mode.")
+    if isinstance(scored, list) and all(isinstance(x, dict) and "pursuit_score" in x for x in scored):
         return sorted(scored, key=lambda x: x.get("pursuit_score", 0), reverse=True)
-    return scored
+    raise RuntimeError("Claude returned an invalid scoring result.")
 
 
 def _salvage_json_array(raw: str) -> list[dict]:
     """Recover the leading complete objects from a truncated JSON array."""
     if not raw.lstrip().startswith("["):
         return []
-    # Trim back to the last complete object (last '}') and close the array.
-    last = raw.rfind("}")
-    if last == -1:
-        return []
-    candidate = raw[: last + 1] + "]"
-    try:
-        parsed = json.loads(candidate)
-        return parsed if isinstance(parsed, list) else []
-    except json.JSONDecodeError:
-        return []
+    decoder = json.JSONDecoder()
+    remaining = raw.lstrip()[1:].lstrip()
+    result = []
+    while remaining:
+        try:
+            value, end = decoder.raw_decode(remaining)
+        except json.JSONDecodeError:
+            break
+        if not isinstance(value, dict):
+            break
+        result.append(value)
+        remaining = remaining[end:].lstrip()
+        if not remaining.startswith(","):
+            break
+        remaining = remaining[1:].lstrip()
+    return result
+
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +189,7 @@ async def stream_brief(
     areas_str = ", ".join(focus_areas) if focus_areas else "all focus areas"
     top = [s for s in scored if s.get("priority") in ("High", "Medium")][:15]
 
-    async with _async_client.messages.stream(
+    async with anthropic.AsyncAnthropic().messages.stream(
         model=MODEL,
         max_tokens=8192,
         system=BRIEF_SYSTEM,

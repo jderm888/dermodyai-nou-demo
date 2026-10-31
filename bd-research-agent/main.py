@@ -5,7 +5,7 @@ Run with: uvicorn main:app --reload --port 8001
 
 import json
 import os
-from typing import Optional
+from typing import Optional, Literal
 
 from dotenv import load_dotenv
 load_dotenv()  # loads ANTHROPIC_API_KEY (and any other vars) from .env
@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+import source_report
 import agent
 import usaspending_client as usa
 import sam_client as sam
@@ -30,6 +31,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 # ---------------------------------------------------------------------------
 
 class ResearchRequest(BaseModel):
+    analysis_mode: Literal["source", "claude"] = "source"
     focus_areas: list[str] = list(NAICS_PROFILES.keys())
     sam_api_key: Optional[str] = None
     days_back: int = 180
@@ -66,7 +68,9 @@ async def research(req: ResearchRequest):
         profile = NAICS_PROFILES.get(area)
         if profile:
             selected_codes.extend(profile["codes"])
-    selected_codes = list(set(selected_codes)) or ALL_NAICS_CODES
+    selected_codes = sorted(set(selected_codes))
+    if not selected_codes:
+        raise HTTPException(status_code=422, detail="Select at least one valid focus area.")
 
     all_items: list[dict] = []
     errors: list[str] = []
@@ -87,53 +91,60 @@ async def research(req: ResearchRequest):
     if req.sam_api_key and req.sam_api_key.strip():
         # Cap SAM lookups to the high-signal codes (SAM has a low daily request
         # limit and only accepts one NAICS per request). Respect the selected
-        # focus areas where they overlap, else fall back to the capped list.
-        sam_codes = [c for c in SAM_NAICS_CODES if c in selected_codes] or SAM_NAICS_CODES
+        # focus areas; never substitute unrelated codes.
+        sam_codes = [c for c in SAM_NAICS_CODES if c in selected_codes]
         try:
+            if not sam_codes:
+                errors.append("SAM.gov skipped: selected focus areas do not overlap the capped SAM NAICS list.")
             raw_opps = sam.fetch_opportunities(
                 naics_codes=sam_codes,
                 api_key=req.sam_api_key.strip(),
                 limit=req.limit,
                 set_aside_codes=req.set_aside_filter,
+                days_posted=min(req.days_back, 364),
             )
             opps = sam.normalize_opportunities(raw_opps)
             all_items.extend(opps)
-            sam_status = f"ok ({len(opps)} opportunities)"
+            sam_status = f"ok ({len(opps)} opportunities)" if sam_codes else "skipped (no matching capped NAICS)"
         except httpx.HTTPStatusError as e:
             code = e.response.status_code
-            detail = e.response.text[:200]
+            detail = "See SAM.gov account status for details."
             if code in (401, 403):
                 sam_status = "invalid_key"
                 errors.append(
-                    "SAM.gov: API key rejected. New keys can take up to a day to activate; "
-                    f"also check it was copied fully. ({detail})"
+                    "SAM.gov: API key or access rejected. Check your account and confirm the full key was copied."
                 )
             elif code == 429:
                 sam_status = "rate_limited"
                 errors.append(
                     "SAM.gov: daily request limit reached for this key "
-                    "(public keys are limited to a few requests per day). Try again tomorrow."
+                    "Reset timing is controlled by SAM.gov; retry after the provider resets your quota."
                 )
             else:
                 sam_status = "error"
                 errors.append(f"SAM.gov HTTP {code}: {detail}")
         except Exception as e:
             sam_status = "error"
-            errors.append(f"SAM.gov error: {e}")
+            errors.append("SAM.gov request failed; source unavailable for this run.")
 
-    if not all_items and errors:
+    if not all_items and any(not e.startswith("SAM.gov skipped:") for e in errors):
         raise HTTPException(status_code=502, detail="; ".join(errors))
 
     # --- Score with Claude ---
     scored = []
-    if all_items:
+    if req.analysis_mode == "source":
+        scored = source_report.source_items(all_items)
+    elif all_items:
         try:
-            scored = agent.score_opportunities(all_items)
+            scored = agent.score_opportunities(sorted(all_items, key=lambda i: i.get("type") != "solicitation"))
+            if len(scored) < len(all_items):
+                errors.append(f"Claude scored {len(scored)} of {len(all_items)} fetched records (30-record analysis cap; partial JSON may also reduce coverage).")
         except Exception as e:
             errors.append(f"Scoring error: {e}")
             scored = []
 
     return {
+        "analysis_mode": req.analysis_mode,
         "scored": scored,
         "raw_count": len(all_items),
         "naics_codes": selected_codes,
@@ -162,6 +173,11 @@ async def brief(request: Request):
         pass
 
     async def event_stream():
+        if body.get("analysis_mode", "source") == "source":
+            report = source_report.build_source_report(scored, market_context, body.get("errors", []))
+            yield f"data: {json.dumps({'text': report})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
         try:
             async for chunk in agent.stream_brief(scored, market_context, focus_areas):
                 data = json.dumps({"text": chunk})
