@@ -422,7 +422,7 @@ Example: 'The Government requires contractor support for systems engineering and
     <div style="margin-top:20px; display:flex; gap:12px; align-items:center;">
       <button class="btn btn-success" id="draft-btn" onclick="runDraft()">
         <div class="spinner" id="draft-spinner"></div>
-        Generate Proposal Draft
+        Generate Compliance Report / Draft
       </button>
       <span id="draft-status" style="font-size:13px; color:#8b949e;"></span>
     </div>
@@ -432,7 +432,7 @@ Example: 'The Government requires contractor support for systems engineering and
   <!-- Draft Card (hidden until draft starts) -->
   <div class="card hidden" id="draft-card">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-      <h2 style="margin:0;">Proposal Draft</h2>
+      <h2 style="margin:0;">RFP Report / Conditional Draft</h2>
       <button class="copy-btn" onclick="copyDraft()">Copy to Clipboard</button>
     </div>
     <div class="warning-box" id="truncation-warning">
@@ -613,6 +613,8 @@ Example: 'The Government requires contractor support for systems engineering and
     draftArea.innerHTML = '<span class="draft-cursor"></span>';
 
     let fullText = '';
+    let stopReason = null;
+    document.getElementById('truncation-warning').style.display = 'none';
 
     try {
       const res = await fetch('/api/draft', {
@@ -642,7 +644,7 @@ Example: 'The Government requires contractor support for systems engineering and
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') { draftArea.querySelector('.draft-cursor')?.remove(); break; }
-          try {
+          {
             const obj = JSON.parse(payload);
             if (obj.error) throw new Error(obj.error);
             if (obj.text) {
@@ -650,14 +652,16 @@ Example: 'The Government requires contractor support for systems engineering and
               draftArea.innerHTML = renderMarkdown(fullText) + '<span class="draft-cursor"></span>';
               draftArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
+            if (obj.stop_reason) stopReason = obj.stop_reason;
             if (obj.stop_reason === 'max_tokens') {
               document.getElementById('truncation-warning').style.display = 'block';
             }
-          } catch (parseErr) { /* ignore partial JSON */ }
+          }
         }
       }
 
-      status.textContent = 'Draft complete.';
+      if (!stopReason) throw new Error('Report stream ended without completion. Retry.');
+      status.textContent = stopReason === 'blocked' ? 'Compliance report complete — NO SUBMIT. Resolve the listed blockers.' : stopReason === 'max_tokens' ? 'Draft incomplete — output limit reached.' : 'Internal draft complete — human review required.';
       draftArea.querySelector('.draft-cursor')?.remove();
     } catch (e) {
       showError(errBox, e.message);
@@ -668,7 +672,7 @@ Example: 'The Government requires contractor support for systems engineering and
   }
 
   function renderMarkdown(text) {
-    return text
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
