@@ -229,10 +229,15 @@ async def stream_draft(
     # Always render the complete extracted compliance record before any prose.
     report = compliance_report(requirements, matched)
     yield {"text": report}
-    if blocked(requirements):
-        yield {"text": "\n\n## Draft Gate\nNO SUBMIT — A proposal response was not generated. Resolve the blockers and missing evidence above, then re-analyze the complete packet. Capability matches are illustrative only and do not establish an eligible team or approved commitments.\n"}
+    is_blocked = blocked(requirements)
+    if not requirements.get("compliance_matrix") or not requirements.get("_source_text"):
+        # Nothing source-backed to draft from; re-analysis is the only fix.
+        yield {"text": "\n\n## Draft Gate\nNO SUBMIT — A proposal response was not generated because the analysis is incomplete. Re-analyze the complete packet.\n"}
         yield {"stop_reason": "blocked"}
         return
+    if is_blocked:
+        yield {"gate": "no_submit"}
+        yield {"text": "\n\n# Conditional Draft — NO SUBMIT\nThe blockers and missing information above are unresolved, so this draft is internal working material only. Bracketed items mark what must be supplied or verified before anything is submitted. Capability matches are illustrative only and do not establish an eligible team or approved commitments.\n\n"}
     req_slim = requirements  # Preserve the original source and every compliance field.
     matched_slim = matched
 
@@ -244,10 +249,17 @@ async def stream_draft(
         company_name=COMPANY["name"],
         why_us=COMPANY["why_us_guidance"],
     )
+    if is_blocked:
+        prompt += (
+            "\nThis opportunity is currently NO SUBMIT. Write the draft anyway as conditional working "
+            "material. Wherever a section depends on a bid blocker or missing information listed in the "
+            "requirements record, do not write around it: insert a bracketed marker such as "
+            "[BLOCKER: ...] or [MISSING: ...] naming what must be resolved.\n"
+        )
 
     async with _async_client.messages.stream(
         model=MODEL,
-        max_tokens=12000,
+        max_tokens=32000,
         system=DRAFT_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
