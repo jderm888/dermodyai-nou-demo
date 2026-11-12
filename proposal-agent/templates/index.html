@@ -614,6 +614,7 @@ Example: 'The Government requires contractor support for systems engineering and
 
     let fullText = '';
     let stopReason = null;
+    let noSubmit = false;
     document.getElementById('truncation-warning').style.display = 'none';
 
     try {
@@ -652,6 +653,7 @@ Example: 'The Government requires contractor support for systems engineering and
               draftArea.innerHTML = renderMarkdown(fullText) + '<span class="draft-cursor"></span>';
               draftArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
+            if (obj.gate === 'no_submit') noSubmit = true;
             if (obj.stop_reason) stopReason = obj.stop_reason;
             if (obj.stop_reason === 'max_tokens') {
               document.getElementById('truncation-warning').style.display = 'block';
@@ -661,7 +663,7 @@ Example: 'The Government requires contractor support for systems engineering and
       }
 
       if (!stopReason) throw new Error('Report stream ended without completion. Retry.');
-      status.textContent = stopReason === 'blocked' ? 'Compliance report complete — NO SUBMIT. Resolve the listed blockers.' : stopReason === 'max_tokens' ? 'Draft incomplete — output limit reached.' : 'Internal draft complete — human review required.';
+      status.textContent = stopReason === 'blocked' ? 'Compliance report complete — NO SUBMIT. Resolve the listed blockers.' : stopReason === 'max_tokens' ? 'Draft incomplete — output limit reached.' : noSubmit ? 'Conditional draft complete — NO SUBMIT until the listed blockers are resolved.' : 'Internal draft complete — human review required.';
       draftArea.querySelector('.draft-cursor')?.remove();
     } catch (e) {
       showError(errBox, e.message);
