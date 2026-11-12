@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
+from starlette.concurrency import run_in_threadpool
 
 import agent
 from pdf_utils import extract_text_from_pdf_bytes, truncate_rfp
@@ -63,10 +64,12 @@ async def analyze(
         raise HTTPException(status_code=422, detail="Provide either rfp_text or rfp_file.")
 
     text, was_truncated = truncate_rfp(raw_text)
+    if was_truncated:
+        raise HTTPException(status_code=422, detail="Packet exceeds the analysis limit. Supply a complete smaller packet; silently truncating requirements is unsafe.")
 
     # --- Step 1: Extract requirements ---
     try:
-        requirements = agent.extract_requirements(text)
+        requirements = await run_in_threadpool(agent.extract_requirements, text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Requirement extraction failed: {e}")
 
@@ -78,9 +81,12 @@ async def analyze(
 
     # --- Step 2: Match capabilities ---
     try:
-        matched = agent.match_capabilities(requirements)
+        matched = await run_in_threadpool(agent.match_capabilities, requirements)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Capability matching failed: {e}")
+
+    if "parse_error" in matched:
+        raise HTTPException(status_code=502, detail="Capability matching returned incomplete JSON; retry analysis.")
 
     return {
         "requirements": requirements,

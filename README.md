@@ -11,7 +11,7 @@ Demo project showcasing AI agents for proposal generation and BD research, frame
 
 ## Setup
 
-Requires Python 3.10+ and an Anthropic API key (https://console.anthropic.com).
+Requires Python 3.10+. Proposal generation and optional Claude BD analysis require funded Anthropic API access. BD source reports do not require an Anthropic key or credits.
 
 Each agent is a separate FastAPI app with its own dependencies. In each agent folder, create a `.env` file:
 
@@ -68,3 +68,21 @@ Set `COMPANY_PROFILE` in each agent's `.env` to switch:
 Capability content is illustrative, drawn from public high-level descriptions. It's not internal
 company data and has no real contract numbers. USASpending.gov/SAM.gov results are real public data.
 To add a company, copy a profile dict and register it in `PROFILES`.
+
+## BD source report mode (no AI credits)
+
+The default **Source report (no AI credits)** mode fetches live source records and
+builds a five-section factual report without contacting Anthropic. It does not
+assign pursuit scores or generate strategic recommendations. Select **Claude
+analysis** explicitly for AI scoring and briefs; those require API credits.
+
+SAM lookups use the selected focus areas intersected with the profile's capped
+NAICS list (up to three requests for Lockheed, with early stopping at the result
+limit). A non-overlapping focus selection skips SAM. SAM quota reset timing is
+provider-controlled; a 429 is reported, not treated as an invalid key.
+
+Existing awards are labeled separately from SAM notices. Market totals cover the
+last 730 days. API/scoring failures remain warnings rather than fake results.
+New research hides the prior report to prevent mixing old and new runs.
+
+Validation: `bd-research-agent/.venv/bin/python -m unittest discover -s tests -v`

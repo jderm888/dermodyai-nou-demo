@@ -27,24 +27,44 @@ def fetch_opportunities(
     posted_from = (datetime.today() - timedelta(days=days_posted)).strftime("%m/%d/%Y")
     posted_to = datetime.today().strftime("%m/%d/%Y")
 
-    # Parameter names per the SAM.gov Get Opportunities v2 API
-    params = {
-        "api_key": api_key,
-        "ncode": ",".join(naics_codes),
-        "status": "active",
-        "limit": limit,
-        "offset": 0,
-        "postedFrom": posted_from,
-        "postedTo": posted_to,
-    }
-
-    if set_aside_codes:
-        params["typeOfSetAside"] = ",".join(set_aside_codes)
+    # SAM.gov's "ncode" parameter accepts only ONE NAICS code at a time;
+    # a comma-separated list silently returns zero records. Query each code
+    # separately and merge, deduping by noticeId, up to the overall limit.
+    merged: list[dict] = []
+    seen: set = set()
 
     with httpx.Client(timeout=TIMEOUT) as client:
-        resp = client.get(BASE_URL, params=params)
-        resp.raise_for_status()
-        return resp.json()
+        for code in naics_codes:
+            if len(merged) >= limit:
+                break
+
+            # Parameter names per the SAM.gov Get Opportunities v2 API
+            params = {
+                "api_key": api_key,
+                "ncode": code,
+                "status": "active",
+                "limit": limit,
+                "offset": 0,
+                "postedFrom": posted_from,
+                "postedTo": posted_to,
+            }
+            if set_aside_codes:
+                params["typeOfSetAside"] = ",".join(set_aside_codes)
+
+            resp = client.get(BASE_URL, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+
+            for o in (data.get("opportunitiesData") or []):
+                nid = o.get("noticeId")
+                if nid in seen:
+                    continue
+                seen.add(nid)
+                merged.append(o)
+                if len(merged) >= limit:
+                    break
+
+    return {"opportunitiesData": merged, "totalRecords": len(merged)}
 
 
 def normalize_opportunities(raw: dict) -> list[dict]:
