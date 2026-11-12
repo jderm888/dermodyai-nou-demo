@@ -3,6 +3,18 @@
 Demo project showcasing AI agents for proposal generation and BD research, framed around
 **Lockheed Martin** by default (illustrative demo data — not affiliated with or endorsed by Lockheed Martin).
 
+## Quick start (demo)
+
+From this folder, in Terminal:
+
+```bash
+./start_demo.sh
+```
+
+It installs what each agent needs, asks for your Anthropic API key on the first run, runs a
+checkup (key works, credits available, USASpending.gov reachable), starts both agents, and opens
+them in your browser. Press Ctrl+C in that window to stop. The manual steps are below.
+
 ## Structure
 
 - `/proposal-agent` — Agent responsible for generating proposals
